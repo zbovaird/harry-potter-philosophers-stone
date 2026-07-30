@@ -1,0 +1,11 @@
+{
+  "name": "harry-potter-philosophers-stone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Third-person Philosopher's Stone adventure — cast spells, choose your wizard",
+  "scripts": {
+    "start": "npx --yes serve . -p 4174",
+    "dev": "npm run start"
+  }
+}

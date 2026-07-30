@@ -1,0 +1,31 @@
+Harry Potter — The Philosopher's Stone
+======================================
+
+Engine
+------
+- three.js r165 (https://threejs.org/) — MIT License
+
+Textures (CC0)
+--------------
+From Mordor's Adventures asset pack / Poly Haven / ambientCG:
+- wood_diff.jpg, wood_nor.jpg — wood_cabinet_worn_long (Poly Haven)
+- stone_diff.jpg, stone_nor.jpg — rock_wall_02 (Poly Haven)
+- plaster_diff.jpg — plastered_wall_04 (Poly Haven)
+- thatch_diff.jpg, bark_*, grass_*, leaves_* — Poly Haven / ambientCG
+- meadow.hdr — meadow_2 HDRI (Poly Haven)
+License: Creative Commons CC0 1.0 Universal
+https://polyhaven.com/license
+
+Procedural
+----------
+- Brick, cobblestone, and slate roof maps generated at runtime in js/textures.js
+- Tudor shop architecture, gas lamps, props in js/diagonProps.js
+- Character heroes in js/characters.js
+
+Audio
+-----
+- Procedural music beds and spell SFX via the Web Audio API
+- Optional file drops: assets/audio/music/ and assets/audio/sfx/
+
+This is an unofficial fan project for personal/educational use and is not affiliated
+with or endorsed by Warner Bros., J.K. Rowling, or associated rights holders.

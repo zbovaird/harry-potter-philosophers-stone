@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Harry Potter — The Philosopher's Stone</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <header class="hidden" id="game-header">
+        <h1>Harry Potter</h1>
+        <p class="subtitle" id="level-subtitle">The Philosopher's Stone</p>
+      </header>
+
+      <div id="hud" class="hidden">
+        <p id="objective">Claim your wand at Ollivanders.</p>
+        <p id="status">Spells ready</p>
+      </div>
+
+      <div id="combat-hud" class="hidden" aria-label="Combat health">
+        <div class="health-heading">
+          <strong id="player-name">Wizard</strong>
+          <span id="health-text">100 / 100</span>
+        </div>
+        <div class="health-track"><span id="health-fill"></span></div>
+        <div class="mana-heading">
+          <strong>Mana</strong>
+          <span id="mana-text">100 / 100</span>
+        </div>
+        <div class="mana-track"><span id="mana-fill"></span></div>
+        <div id="boss-health" class="hidden">
+          <div class="health-heading boss-heading">
+            <strong id="boss-name">Enemy</strong>
+            <span id="boss-health-text">100 / 100</span>
+          </div>
+          <div class="health-track boss-track"><span id="boss-health-fill"></span></div>
+        </div>
+      </div>
+
+      <div id="spell-hotbar" class="hidden" aria-label="Spell hotbar"></div>
+
+      <div id="actions-menu" class="hidden" aria-label="Available actions">
+        <p class="actions-title">Actions</p>
+        <button id="action-btn" type="button" disabled>
+          <span class="action-key">E</span>
+          <span id="action-label">Nothing nearby</span>
+        </button>
+        <p class="actions-hint">Press the key shown · Click to cast · Scroll / 1–0 for spells</p>
+      </div>
+
+      <div id="controls-help" class="hidden">
+        <p><strong>Move</strong> WASD · <strong>Look</strong> Mouse · <strong>Run</strong> Shift · <strong>Jump</strong> Space</p>
+        <p><strong>Cast</strong> Click · <strong>Cycle spells</strong> Scroll / 1–0 · <strong>Interact</strong> E</p>
+      </div>
+
+      <div id="message" class="hidden"></div>
+      <div id="fade" class="hidden"></div>
+
+      <div id="loading">
+        <p class="brand">Harry Potter</p>
+        <p>Loading the wizarding world…</p>
+        <div class="bar"><span id="loading-bar"></span></div>
+        <p id="loading-pct">0%</p>
+      </div>
+
+      <div id="character-select" class="hidden">
+        <h2>Choose your witch or wizard</h2>
+        <p class="select-lead">Every adventure begins with a choice. Who will you be?</p>
+        <div id="character-grid" class="character-grid"></div>
+        <button id="confirm-character-btn" type="button" disabled>Begin</button>
+      </div>
+
+      <div id="level-select" class="hidden">
+        <h2>The Philosopher's Stone</h2>
+        <p>Follow the events of the first film — in order.</p>
+        <div class="level-actions" id="level-buttons"></div>
+        <button id="change-character-btn" type="button" class="secondary">Change character</button>
+      </div>
+
+      <div id="win-screen" class="hidden">
+        <h2 id="win-title">Level complete</h2>
+        <p id="win-text">Well done.</p>
+        <button id="continue-btn" type="button">Continue</button>
+      </div>
+    </div>
+
+    <canvas id="game" tabindex="0"></canvas>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
