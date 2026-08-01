@@ -71,44 +71,63 @@ export function createDetailedHermione() {
   const root = new THREE.Group();
   const robe = new THREE.MeshStandardMaterial({ color: 0x1a2a4a, roughness: 0.75 });
   const skin = new THREE.MeshStandardMaterial({ color: 0xe4b898, roughness: 0.55 });
-  const hair = new THREE.MeshStandardMaterial({ color: 0x8a4a18, roughness: 0.88 });
-  const hairDark = new THREE.MeshStandardMaterial({ color: 0x6a3810, roughness: 0.92 });
+  const hair = new THREE.MeshStandardMaterial({ color: 0x8a4a18, roughness: 0.82 });
+  const hairDark = new THREE.MeshStandardMaterial({ color: 0x6a3810, roughness: 0.9 });
   const body = m(new THREE.CapsuleGeometry(0.2, 0.45, 8, 12), robe);
   body.position.y = 1.05;
   const head = m(new THREE.SphereGeometry(0.15, 14, 12), skin);
   head.position.y = 1.55;
-  // Scalp volume
-  const scalp = m(new THREE.SphereGeometry(0.17, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hair, false, true);
-  scalp.position.set(0, 1.58, 0);
-  scalp.scale.set(1.1, 1.0, 1.05);
-  root.add(scalp);
-  // Dense bushy curls
-  for (let i = 0; i < 40; i += 1) {
-    const a = (i / 40) * Math.PI * 2;
-    const layer = i % 3;
-    const r = 0.14 + layer * 0.03;
+
+  // Feminine silhouette: wide curly crown + long back fall
+  const crown = m(new THREE.SphereGeometry(0.19, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.7), hair, false, true);
+  crown.position.set(0, 1.6, -0.01);
+  crown.scale.set(1.3, 1.15, 1.25);
+  root.add(crown);
+  const back = m(new THREE.CapsuleGeometry(0.12, 0.4, 6, 12), hair, false, true);
+  back.position.set(0, 1.2, -0.12);
+  back.scale.set(1.4, 1, 0.85);
+  back.rotation.x = 0.2;
+  root.add(back);
+
+  for (let i = 0; i < 44; i += 1) {
+    const a = (i / 44) * Math.PI * 2;
+    const layer = i % 4;
+    const r = 0.15 + layer * 0.035;
     const curl = m(
-      new THREE.SphereGeometry(0.035 + (i % 4) * 0.008, 8, 6),
+      new THREE.SphereGeometry(0.038 + (i % 4) * 0.01, 8, 6),
       i % 2 ? hair : hairDark,
       false,
       true
     );
     curl.position.set(
       Math.sin(a) * r,
-      1.52 + layer * 0.05 + (i % 5) * 0.012,
-      Math.cos(a) * r * 0.95
+      1.48 - layer * 0.04 + (i % 3) * 0.01,
+      Math.cos(a) * r * 0.9 - 0.02
     );
     root.add(curl);
   }
-  // Shoulder-length hanging ringlets
-  for (let i = 0; i < 12; i += 1) {
-    const a = -1.15 + (i / 11) * 2.3;
-    const ringlet = m(new THREE.CapsuleGeometry(0.026, 0.16 + (i % 3) * 0.04, 4, 8), hair, false, true);
-    ringlet.position.set(Math.sin(a) * 0.15, 1.32 - (i % 3) * 0.03, Math.cos(a) * 0.11);
-    ringlet.rotation.z = a * 0.25;
-    ringlet.rotation.x = 0.3;
+  // Long ringlets past the shoulders
+  for (let i = 0; i < 16; i += 1) {
+    const a = -1.3 + (i / 15) * 2.6;
+    const ringlet = m(
+      new THREE.CapsuleGeometry(0.028, 0.2 + (i % 4) * 0.05, 4, 8),
+      i % 2 ? hair : hairDark,
+      false,
+      true
+    );
+    ringlet.position.set(Math.sin(a) * 0.17, 1.15 - (i % 4) * 0.04, Math.cos(a) * 0.11 - 0.02);
+    ringlet.rotation.z = a * 0.28;
+    ringlet.rotation.x = 0.35;
     root.add(ringlet);
   }
+  // Soft bangs
+  for (let i = 0; i < 6; i += 1) {
+    const bang = m(new THREE.CapsuleGeometry(0.016, 0.1, 4, 8), hair, false, true);
+    bang.position.set(-0.08 + i * 0.032, 1.62, 0.15);
+    bang.rotation.x = 0.7;
+    root.add(bang);
+  }
+
   const legs = m(new THREE.CapsuleGeometry(0.08, 0.4, 4, 8), new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.85 }));
   legs.position.y = 0.4;
   root.add(body, head, legs);
