@@ -44,6 +44,19 @@ export function addBoxCollider(colliders, meshObj, level, padding = 0) {
   });
 }
 
+/** Shift local-space AABBs into world space after a level group is positioned. */
+export function worldOffsetColliders(colliders, origin) {
+  if (!origin) return;
+  for (const c of colliders) {
+    c.minX += origin.x;
+    c.maxX += origin.x;
+    c.minY += origin.y;
+    c.maxY += origin.y;
+    c.minZ += origin.z;
+    c.maxZ += origin.z;
+  }
+}
+
 export function addWallBox(group, colliders, { x, y, z, w, h, d, color = 0x6a6055, level, map = null }) {
   const wall = mesh(new THREE.BoxGeometry(w, h, d), mat(color, { roughness: 0.85, map }));
   wall.position.set(x, y, z);

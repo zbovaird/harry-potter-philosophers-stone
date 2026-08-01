@@ -42,13 +42,22 @@ export class CombatState {
   }
 }
 
-export function createEnemy({ root, hp = 80, damage = 12, hitRadius = 0.9, name = "Enemy", speed = 2.2 }) {
+export function createEnemy({
+  root,
+  hp = 80,
+  damage = 12,
+  hitRadius = 1.6,
+  hitHeight = 1.1,
+  name = "Enemy",
+  speed = 2.2,
+}) {
   return {
     root,
     hp,
     maxHp: hp,
     damage,
     hitRadius,
+    hitHeight,
     name,
     speed,
     alive: true,

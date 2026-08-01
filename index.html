@@ -54,7 +54,7 @@
 
       <div id="controls-help" class="hidden">
         <p><strong>Move</strong> WASD · <strong>Look</strong> Mouse · <strong>Run</strong> Shift · <strong>Jump</strong> Space</p>
-        <p><strong>Cast</strong> Click · <strong>Cycle spells</strong> Scroll / 1–0 · <strong>Interact</strong> E</p>
+        <p><strong>Cast</strong> Left-click · <strong>Spells</strong> Scroll / 1–0 / R · <strong>Interact</strong> E</p>
       </div>
 
       <div id="message" class="hidden"></div>
@@ -85,6 +85,29 @@
         <h2 id="win-title">Level complete</h2>
         <p id="win-text">Well done.</p>
         <button id="continue-btn" type="button">Continue</button>
+      </div>
+
+      <div id="house-select" class="hidden">
+        <h2>The Sorting Hat</h2>
+        <p class="select-lead">Where would you most like to belong?</p>
+        <div class="house-grid" id="house-grid">
+          <button type="button" class="house-btn gryffindor" data-house="Gryffindor">
+            <strong>Gryffindor</strong>
+            <span>Courage &amp; daring</span>
+          </button>
+          <button type="button" class="house-btn hufflepuff" data-house="Hufflepuff">
+            <strong>Hufflepuff</strong>
+            <span>Loyalty &amp; hard work</span>
+          </button>
+          <button type="button" class="house-btn ravenclaw" data-house="Ravenclaw">
+            <strong>Ravenclaw</strong>
+            <span>Wit &amp; learning</span>
+          </button>
+          <button type="button" class="house-btn slytherin" data-house="Slytherin">
+            <strong>Slytherin</strong>
+            <span>Ambition &amp; cunning</span>
+          </button>
+        </div>
       </div>
     </div>
 

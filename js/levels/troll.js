@@ -1,29 +1,14 @@
 import * as THREE from "three";
 import {
-  addGround,
-  addWallBox,
-  createNpcFigure,
-  createNameLabel,
-  makeStoneTexture,
-  mat,
-  mesh,
-} from "../worldUtils.js";
+  buildTrollWorld,
+  updateTrollWorld,
+  createDetailedTroll,
+  createDetailedHermione,
+} from "../trollProps.js";
+import { createNameLabel, worldOffsetColliders, mat, mesh } from "../worldUtils.js";
 import { createEnemy } from "../combat.js";
 
 export const TROLL_ORIGIN = new THREE.Vector3(0, 0, 400);
-
-function createTroll() {
-  const root = new THREE.Group();
-  const body = mesh(new THREE.CapsuleGeometry(0.7, 1.2, 6, 10), mat(0x6a7a58, { roughness: 0.85 }));
-  body.position.y = 1.6;
-  const head = mesh(new THREE.SphereGeometry(0.55, 12, 10), mat(0x7a8a65, { roughness: 0.8 }));
-  head.position.y = 2.85;
-  const club = mesh(new THREE.CylinderGeometry(0.12, 0.2, 1.8, 8), mat(0x4a3020, { roughness: 0.9 }));
-  club.position.set(1.0, 1.8, 0.2);
-  club.rotation.z = -0.6;
-  root.add(body, head, club);
-  return root;
-}
 
 export function buildTrollLevel(game) {
   const group = new THREE.Group();
@@ -31,58 +16,51 @@ export function buildTrollLevel(game) {
   const colliders = [];
   const interactives = [];
 
-  addGround(group, colliders, {
-    size: 40,
-    color: 0x4a5058,
-    texture: makeStoneTexture(),
-    level: "troll",
-  });
+  const anim = buildTrollWorld(game, group, colliders);
 
-  addWallBox(group, colliders, { x: 0, y: 3, z: -12, w: 24, h: 6, d: 1, color: 0x5a6068, level: "troll" });
-  addWallBox(group, colliders, { x: -12, y: 3, z: 0, w: 1, h: 6, d: 24, color: 0x5a6068, level: "troll" });
-  addWallBox(group, colliders, { x: 12, y: 3, z: 0, w: 1, h: 6, d: 24, color: 0x5a6068, level: "troll" });
-  addWallBox(group, colliders, { x: 0, y: 3, z: 12, w: 24, h: 6, d: 1, color: 0x5a6068, level: "troll" });
-
-  // Stalls / sinks
-  for (let i = -2; i <= 2; i += 1) {
-    const stall = mesh(new THREE.BoxGeometry(1.6, 2.2, 1.2), mat(0x8a9098, { roughness: 0.7 }));
-    stall.position.set(i * 3.2, 1.1, -8);
-    group.add(stall);
-  }
-
-  const hermione = createNpcFigure({ robe: 0x1a2a4a, hair: 0x8a4a18, skin: 0xe4b898 });
+  const hermione = createDetailedHermione();
   hermione.position.set(-6, 0, -4);
   const hLabel = createNameLabel("Hermione");
-  hLabel.position.set(0, 2.1, 0);
-  hLabel.scale.set(2, 0.45, 1);
+  hLabel.position.set(0, 2.15, 0);
+  hLabel.scale.set(2.1, 0.45, 1);
   hermione.add(hLabel);
   group.add(hermione);
   interactives.push({ id: "hermione", root: hermione, label: "Check on Hermione", range: 2.5 });
 
-  const trollMesh = createTroll();
+  const trollMesh = createDetailedTroll();
   trollMesh.position.set(4, 0, 2);
   group.add(trollMesh);
   const troll = createEnemy({
     root: trollMesh,
-    hp: 220,
-    damage: 18,
-    hitRadius: 1.4,
+    hp: 180,
+    damage: 14,
+    hitRadius: 2.8,
+    hitHeight: 1.6,
     name: "Mountain Troll",
     speed: 1.6,
   });
 
-  const light = new THREE.PointLight(0xaabbcc, 1.0, 30);
-  light.position.set(0, 5, 0);
-  group.add(light);
-
+  // Visible bathroom exit door (south wall opening)
+  const exitDoor = mesh(
+    new THREE.BoxGeometry(3.6, 3.2, 0.2),
+    mat(0x3a454c, { roughness: 0.55, metalness: 0.25 })
+  );
+  exitDoor.position.set(-3, 1.6, -12.7);
+  const handle = mesh(
+    new THREE.SphereGeometry(0.08, 8, 8),
+    mat(0xc9a227, { metalness: 0.85, roughness: 0.3 })
+  );
+  handle.position.set(-1.6, 1.6, -12.5);
+  group.add(exitDoor, handle);
   interactives.push({
     id: "exit",
-    root: hermione,
+    root: exitDoor,
     label: "Escort Hermione out",
-    range: 2.8,
+    range: 3.5,
   });
 
   group.position.copy(TROLL_ORIGIN);
+  worldOffsetColliders(colliders, TROLL_ORIGIN);
   game.scene.add(group);
   game.levelGroups.troll = group;
   game.levelColliders.troll = colliders;
@@ -91,6 +69,7 @@ export function buildTrollLevel(game) {
     enemies: [troll],
     hermioneChecked: false,
     troll,
+    anim,
   };
 
   return { spawn: TROLL_ORIGIN.clone().add(new THREE.Vector3(-4, 0, 6)) };
@@ -107,12 +86,15 @@ export function resetTrollQuest(game) {
   t.slow = 0;
   t.root.visible = true;
   t.root.position.set(4, 0, 2);
+  t.root.rotation.set(0, 0, 0);
   t.root.scale.setScalar(1);
 }
 
 export function updateTrollLevel(game, delta, time) {
   const data = game.levelData.troll;
   if (!data || !game.player) return;
+  updateTrollWorld(data.anim, time, delta);
+
   const troll = data.troll;
   if (!troll.alive) {
     troll.root.rotation.x = Math.min(Math.PI / 2, troll.root.rotation.x + delta * 1.2);
@@ -122,7 +104,6 @@ export function updateTrollLevel(game, delta, time) {
   troll.stun = Math.max(0, troll.stun - delta);
   troll.slow = Math.max(0, troll.slow - delta);
   troll.attackCd = Math.max(0, troll.attackCd - delta);
-
   if (troll.stun > 0) return;
 
   const origin = TROLL_ORIGIN;
@@ -132,7 +113,7 @@ export function updateTrollLevel(game, delta, time) {
   toPlayer.y = 0;
   const dist = toPlayer.length();
 
-  if (dist > 1.8) {
+  if (dist > 1.9) {
     const speed = troll.speed * (troll.slow > 0 ? 0.4 : 1);
     toPlayer.normalize();
     trollPos.addScaledVector(toPlayer, speed * delta);

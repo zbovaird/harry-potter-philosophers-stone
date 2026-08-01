@@ -56,6 +56,7 @@ export function loadProgress() {
     completed: {},
     currentLevel: "diagon",
     lastCharacter: null,
+    house: null,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -66,6 +67,7 @@ export function loadProgress() {
       completed: data.completed && typeof data.completed === "object" ? data.completed : {},
       currentLevel: valid.has(data.currentLevel) ? data.currentLevel : "diagon",
       lastCharacter: data.lastCharacter || null,
+      house: data.house || null,
     };
   } catch {
     return defaults;
@@ -84,9 +86,7 @@ export function markLevelComplete(levelId) {
   return saveProgress({ completed: progress.completed, currentLevel: levelId });
 }
 
-export function isLevelUnlocked(levelId, progress = loadProgress()) {
-  const idx = LEVELS.findIndex((l) => l.id === levelId);
-  if (idx <= 0) return true;
-  const prev = LEVELS[idx - 1];
-  return Boolean(progress.completed[prev.id]);
+export function isLevelUnlocked(_levelId, _progress = loadProgress()) {
+  // Free level select — all movie chapters available from the start
+  return true;
 }

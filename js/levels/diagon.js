@@ -109,28 +109,63 @@ function createWandPedestal(texLib) {
   root.add(base, column, top, cushion, wand, tip, glow);
   root.userData.wand = wand;
   root.userData.tip = tip;
+  root.userData.glow = glow;
   return root;
 }
 
 function createFeatherProp() {
   const root = new THREE.Group();
-  const quill = mesh(
-    new THREE.CylinderGeometry(0.008, 0.014, 0.55, 6),
-    mat(0xf5f0e0, { roughness: 0.45 })
-  );
-  quill.position.y = 0.28;
-  const vane = mesh(
-    new THREE.PlaneGeometry(0.18, 0.4),
-    new THREE.MeshStandardMaterial({
-      color: 0xf8f4ea,
-      side: THREE.DoubleSide,
-      roughness: 0.55,
-      transparent: true,
-      opacity: 0.9,
-    })
-  );
-  vane.position.set(0.06, 0.35, 0);
-  root.add(quill, vane);
+  const vaneMat = new THREE.MeshStandardMaterial({
+    color: 0xf4efe4,
+    side: THREE.DoubleSide,
+    roughness: 0.72,
+    metalness: 0.02,
+  });
+  const tipMat = new THREE.MeshStandardMaterial({
+    color: 0xd8c8a8,
+    side: THREE.DoubleSide,
+    roughness: 0.8,
+  });
+  const shaftMat = mat(0xe8dcc8, { roughness: 0.4, metalness: 0.08 });
+
+  // Quill / rachis
+  const shaft = mesh(new THREE.CylinderGeometry(0.006, 0.011, 0.72, 8), shaftMat);
+  shaft.position.y = 0.36;
+  root.add(shaft);
+
+  // Calamus (lower hollow tip)
+  const calamus = mesh(new THREE.CylinderGeometry(0.01, 0.007, 0.1, 8), mat(0xc8b898, { roughness: 0.55 }));
+  calamus.position.y = 0.04;
+  root.add(calamus);
+
+  // Paired barbs along the shaft — wider mid-vane, taper to tip
+  for (let i = 0; i < 18; i += 1) {
+    const t = i / 17;
+    const y = 0.12 + t * 0.58;
+    const halfW = 0.045 + Math.sin(t * Math.PI) * 0.11;
+    const len = halfW * 2;
+    const barbL = mesh(
+      new THREE.PlaneGeometry(len, 0.028 + (1 - t) * 0.01),
+      t > 0.75 ? tipMat : vaneMat
+    );
+    barbL.position.set(-halfW * 0.45, y, 0);
+    barbL.rotation.z = 0.15 + t * 0.08;
+    barbL.rotation.y = 0.05;
+    const barbR = barbL.clone();
+    barbR.position.x = halfW * 0.45;
+    barbR.rotation.z = -0.15 - t * 0.08;
+    barbR.rotation.y = -0.05;
+    root.add(barbL, barbR);
+  }
+
+  // Soft outline fringe near tip
+  const tip = mesh(new THREE.ConeGeometry(0.04, 0.12, 8), tipMat);
+  tip.position.y = 0.78;
+  tip.rotation.x = Math.PI;
+  root.add(tip);
+
+  root.rotation.z = 0.35;
+  root.rotation.y = 0.4;
   return root;
 }
 
@@ -170,23 +205,31 @@ export function buildDiagonLevel(game) {
     range: 2.4,
   });
 
-  // Practice yard near street center
+  // Practice yard — enough targets to try the whole hotbar
   const dummySpots = [
-    [1.8, 6.5],
-    [3.2, 7.8],
-    [2.4, 5.2],
+    [1.6, 5.0],
+    [2.8, 5.6],
+    [4.0, 6.2],
+    [1.4, 6.8],
+    [2.6, 7.4],
+    [3.8, 8.0],
+    [1.8, 8.6],
+    [3.0, 9.2],
+    [4.2, 7.0],
+    [2.2, 6.2],
   ];
   dummySpots.forEach(([x, z], i) => {
     const dummy = createDetailedDummy();
     dummy.position.set(x, 0, z);
-    dummy.rotation.y = -0.6 + i * 0.2;
+    dummy.rotation.y = -0.55 + (i % 5) * 0.12;
     group.add(dummy);
     enemies.push({
       root: dummy,
-      hp: 40,
-      maxHp: 40,
+      hp: 55,
+      maxHp: 55,
       damage: 0,
-      hitRadius: 0.75,
+      hitRadius: 1.5,
+      hitHeight: 1.2,
       name: `Training Dummy ${i + 1}`,
       speed: 0,
       alive: true,
@@ -194,6 +237,7 @@ export function buildDiagonLevel(game) {
       slow: 0,
       attackCd: 0,
       training: true,
+      respawnAt: 0,
     });
   });
 
@@ -204,7 +248,7 @@ export function buildDiagonLevel(game) {
   interactives.push({
     id: "feather",
     root: feather,
-    label: "Practice Leviosa (select Wingardium Leviosa)",
+    label: "Levitate the feather (E or Leviosa · 5)",
     range: 2.5,
   });
 
@@ -257,11 +301,16 @@ export function resetDiagonQuest(game) {
   data.dummiesHit = 0;
   data.ollivanderTalked = false;
   if (data.feather) data.feather.position.y = 0.35;
+  const ped = data.pedestal?.userData;
+  if (ped?.wand) ped.wand.visible = true;
+  if (ped?.tip) ped.tip.visible = true;
+  if (ped?.glow) ped.glow.visible = true;
   for (const e of data.enemies) {
     e.hp = e.maxHp;
     e.alive = true;
     e.root.visible = true;
     e.root.scale.setScalar(1);
+    e.respawnAt = 0;
   }
 }
 
@@ -275,11 +324,20 @@ export function updateDiagonLevel(game, delta, time) {
     data.feather.rotation.z = Math.sin(time * 3) * 0.15;
   } else if (data.feather) {
     data.feather.rotation.y = Math.sin(time * 0.8) * 0.2;
+    data.feather.rotation.z = 0.35 + Math.sin(time * 1.2) * 0.05;
   }
   if (data.pedestal?.userData?.tip?.material) {
     data.pedestal.userData.tip.material.emissiveIntensity = 1.0 + Math.sin(time * 4) * 0.5;
   }
   for (const e of data.enemies) {
+    // Respawn practice dummies so you can try every spell
+    if (!e.alive && e.training && e.respawnAt && time >= e.respawnAt) {
+      e.alive = true;
+      e.hp = e.maxHp;
+      e.root.visible = true;
+      e.root.scale.setScalar(1);
+      e.respawnAt = 0;
+    }
     if (!e.alive) continue;
     e.root.rotation.y += Math.sin(time * 0.5 + e.root.position.x) * delta * 0.05;
   }

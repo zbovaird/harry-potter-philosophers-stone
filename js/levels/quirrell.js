@@ -1,30 +1,14 @@
 import * as THREE from "three";
 import {
-  addGround,
-  addWallBox,
-  makeStoneTexture,
-  mat,
-  mesh,
-} from "../worldUtils.js";
+  buildQuirrellWorld,
+  updateQuirrellWorld,
+  createDetailedQuirrell,
+  createMirrorOfErised,
+} from "../quirrellProps.js";
 import { createEnemy } from "../combat.js";
+import { worldOffsetColliders } from "../worldUtils.js";
 
 export const QUIRRELL_ORIGIN = new THREE.Vector3(0, 0, 1000);
-
-function createQuirrell() {
-  const root = new THREE.Group();
-  const robe = mesh(new THREE.CapsuleGeometry(0.28, 0.55, 6, 10), mat(0x5a1a1a, { roughness: 0.75 }));
-  robe.position.y = 1.15;
-  const head = mesh(new THREE.SphereGeometry(0.18, 12, 10), mat(0xd4a080, { roughness: 0.55 }));
-  head.position.y = 1.7;
-  const turban = mesh(new THREE.TorusGeometry(0.16, 0.08, 8, 14), mat(0x6a2030, { roughness: 0.7 }));
-  turban.position.y = 1.82;
-  turban.rotation.x = Math.PI / 2;
-  // Voldemort face on back
-  const vold = mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(0xc8d0c0, { roughness: 0.5 }));
-  vold.position.set(0, 1.7, -0.18);
-  root.add(robe, head, turban, vold);
-  return root;
-}
 
 export function buildQuirrellLevel(game) {
   const group = new THREE.Group();
@@ -32,63 +16,33 @@ export function buildQuirrellLevel(game) {
   const colliders = [];
   const interactives = [];
 
-  addGround(group, colliders, {
-    size: 50,
-    color: 0x2a2228,
-    texture: makeStoneTexture(),
-    level: "quirrell",
-  });
+  const anim = buildQuirrellWorld(game, group, colliders);
 
-  addWallBox(group, colliders, { x: 0, y: 4, z: -16, w: 28, h: 8, d: 1.2, color: 0x3a3038, level: "quirrell" });
-  addWallBox(group, colliders, { x: -14, y: 4, z: 0, w: 1.2, h: 8, d: 32, color: 0x3a3038, level: "quirrell" });
-  addWallBox(group, colliders, { x: 14, y: 4, z: 0, w: 1.2, h: 8, d: 32, color: 0x3a3038, level: "quirrell" });
-  addWallBox(group, colliders, { x: 0, y: 4, z: 16, w: 28, h: 8, d: 1.2, color: 0x3a3038, level: "quirrell" });
+  const mirror = createMirrorOfErised(game.textures);
+  mirror.position.set(0, 0, -14);
+  group.add(mirror);
+  interactives.push({ id: "mirror", root: mirror, label: "Look into the Mirror of Erised", range: 3.2 });
 
-  // Mirror of Erised
-  const mirrorFrame = mesh(new THREE.BoxGeometry(3.2, 4.5, 0.4), mat(0xd4af37, { metalness: 0.85, roughness: 0.35 }));
-  mirrorFrame.position.set(0, 2.4, -14);
-  const glass = mesh(
-    new THREE.PlaneGeometry(2.6, 3.8),
-    mat(0x88aacc, { metalness: 0.9, roughness: 0.15, emissive: 0x112233, emissiveIntensity: 0.5 })
-  );
-  glass.position.set(0, 2.4, -13.75);
-  group.add(mirrorFrame, glass);
-  interactives.push({ id: "mirror", root: mirrorFrame, label: "Look into the Mirror of Erised", range: 3 });
-
-  const quirrellMesh = createQuirrell();
+  const quirrellMesh = createDetailedQuirrell();
   quirrellMesh.position.set(0, 0, 4);
   group.add(quirrellMesh);
   const quirrell = createEnemy({
     root: quirrellMesh,
-    hp: 320,
-    damage: 16,
-    hitRadius: 1.0,
+    hp: 240,
+    damage: 14,
+    hitRadius: 2.4,
+    hitHeight: 1.3,
     name: "Quirrell",
     speed: 2.0,
   });
 
-  const fireRing = new THREE.Group();
-  for (let i = 0; i < 16; i += 1) {
-    const a = (i / 16) * Math.PI * 2;
-    const flame = mesh(
-      new THREE.ConeGeometry(0.2, 0.8, 6),
-      mat(0xff4400, { emissive: 0xff2200, emissiveIntensity: 1.8, roughness: 0.4 })
-    );
-    flame.position.set(Math.cos(a) * 7, 0.4, Math.sin(a) * 7);
-    fireRing.add(flame);
-  }
-  group.add(fireRing);
-
-  const light = new THREE.PointLight(0xff6644, 1.4, 40);
-  light.position.set(0, 5, 0);
-  group.add(light);
-  const mirrorLight = new THREE.PointLight(0x88aaff, 0.8, 15);
-  mirrorLight.position.set(0, 3, -12);
-  group.add(mirrorLight);
-
-  interactives.push({ id: "exit", root: mirrorFrame, label: "Claim the Stone and leave", range: 3 });
+  const exitAnchor = new THREE.Object3D();
+  exitAnchor.position.set(0, 0, -17);
+  group.add(exitAnchor);
+  interactives.push({ id: "exit", root: exitAnchor, label: "Claim the Stone and leave", range: 3.5 });
 
   group.position.copy(QUIRRELL_ORIGIN);
+  worldOffsetColliders(colliders, QUIRRELL_ORIGIN);
   game.scene.add(group);
   game.levelGroups.quirrell = group;
   game.levelColliders.quirrell = colliders;
@@ -98,7 +52,9 @@ export function buildQuirrellLevel(game) {
     quirrell,
     mirrorSeen: false,
     stoneClaimed: false,
-    fireRing,
+    fireRing: anim.fireRing,
+    anim,
+    mirror,
   };
 
   return { spawn: QUIRRELL_ORIGIN.clone().add(new THREE.Vector3(0, 0, 10)) };
@@ -123,10 +79,11 @@ export function resetQuirrellQuest(game) {
 export function updateQuirrellLevel(game, delta, time) {
   const data = game.levelData.quirrell;
   if (!data || !game.player) return;
+  updateQuirrellWorld(data.anim, time);
 
-  data.fireRing.children.forEach((flame, i) => {
-    flame.scale.y = 0.8 + Math.sin(time * 6 + i) * 0.35;
-  });
+  if (data.mirror?.userData?.glass?.material) {
+    data.mirror.userData.glass.material.emissiveIntensity = 0.35 + Math.sin(time * 2) * 0.15;
+  }
 
   const q = data.quirrell;
   if (!q.alive) {
@@ -138,7 +95,6 @@ export function updateQuirrellLevel(game, delta, time) {
   q.slow = Math.max(0, q.slow - delta);
   q.attackCd = Math.max(0, q.attackCd - delta);
 
-  // Boss only aggressive after mirror is seen
   if (!data.mirrorSeen) {
     q.root.rotation.y = time * 0.3;
     return;
@@ -157,8 +113,7 @@ export function updateQuirrellLevel(game, delta, time) {
     q.root.position.addScaledVector(toPlayer, q.speed * (q.slow > 0 ? 0.45 : 1) * delta);
     q.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
   } else if (q.attackCd <= 0 && game.combat?.alive) {
-    // Check protego shield
-    if (game.caster?.shieldUntil > performance.now() / 1000) {
+    if (game.caster?.shieldUntil > game.time) {
       q.attackCd = 0.8;
       game.showMessage("Protego deflects the curse!");
       return;

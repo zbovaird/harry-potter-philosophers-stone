@@ -42,9 +42,11 @@ export class FxPipeline {
   constructor(renderer, scene, camera) {
     this.renderer = renderer;
     this.composer = new EffectComposer(renderer);
+    // Post at ≤1x — bloom/FXAA at retina was a big FPS tax
+    this.composer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1));
     this.composer.addPass(new RenderPass(scene, camera));
 
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.28, 0.48, 0.82);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.4, 0.88);
     this.composer.addPass(this.bloomPass);
 
     this.vignettePass = new ShaderPass(VignetteShader);
@@ -63,11 +65,10 @@ export class FxPipeline {
   }
 
   setSize(width, height, pixelRatio) {
+    const pr = Math.min(pixelRatio || 1, 1);
+    this.composer.setPixelRatio(pr);
     this.composer.setSize(width, height);
-    this.fxaaPass.material.uniforms.resolution.value.set(
-      1 / (width * pixelRatio),
-      1 / (height * pixelRatio)
-    );
+    this.fxaaPass.material.uniforms.resolution.value.set(1 / (width * pr), 1 / (height * pr));
   }
 
   setBloom(strength, radius = 0.42, threshold = 0.9) {
@@ -116,6 +117,8 @@ export class FxPipeline {
   }
 }
 
+const _hitPos = new THREE.Vector3();
+
 export class SpellBolt {
   constructor(scene) {
     this.scene = scene;
@@ -163,8 +166,11 @@ export class SpellBolt {
       let hitSomething = false;
       for (const target of targets) {
         if (!target.alive || !target.root) continue;
-        const dist = bolt.mesh.position.distanceTo(target.root.position.clone().setY(target.root.position.y + 1));
-        if (dist < (target.hitRadius || 0.8) + bolt.radius) {
+        // Level groups are offset in world space — always test against world position
+        target.root.getWorldPosition(_hitPos);
+        _hitPos.y += target.hitHeight ?? 1.1;
+        const dist = bolt.mesh.position.distanceTo(_hitPos);
+        if (dist < (target.hitRadius || 1.6) + bolt.radius) {
           hits.push({ bolt, target });
           hitSomething = true;
           break;

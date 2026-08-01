@@ -37,6 +37,7 @@ body {
 #win-screen,
 #level-select,
 #character-select,
+#house-select,
 #fade,
 #combat-hud,
 #spell-hotbar,
@@ -363,7 +364,8 @@ header h1 {
 
 #character-select,
 #level-select,
-#win-screen {
+#win-screen,
+#house-select {
   position: absolute;
   inset: 0;
   display: flex;
@@ -380,12 +382,55 @@ header h1 {
 
 #character-select h2,
 #level-select h2,
-#win-screen h2 {
+#win-screen h2,
+#house-select h2 {
   font-family: Cinzel, serif;
   font-size: 2rem;
   color: #d4af37;
   letter-spacing: 0.04em;
 }
+
+.house-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 220px));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.house-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 4px;
+  background: rgba(24, 22, 30, 0.95);
+  color: #e8e0d0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.house-btn strong {
+  font-family: Cinzel, serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+}
+
+.house-btn span {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.house-btn:hover {
+  transform: translateY(-2px);
+  border-color: #d4af37;
+}
+
+.house-btn.gryffindor:hover { background: rgba(80, 20, 20, 0.9); }
+.house-btn.hufflepuff:hover { background: rgba(70, 60, 10, 0.9); }
+.house-btn.ravenclaw:hover { background: rgba(20, 30, 70, 0.9); }
+.house-btn.slytherin:hover { background: rgba(15, 50, 25, 0.9); }
 
 .select-lead {
   max-width: 480px;

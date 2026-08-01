@@ -1,23 +1,15 @@
 import * as THREE from "three";
 import {
-  addGround,
-  createNpcFigure,
-  createNameLabel,
-  makeNoiseTexture,
-  mat,
-  mesh,
-} from "../worldUtils.js";
+  buildForestWorld,
+  updateForestWorld,
+  createForestCreature,
+  createFirenze,
+  createCloakProp,
+} from "../forestProps.js";
+import { createNameLabel, worldOffsetColliders } from "../worldUtils.js";
 import { createEnemy } from "../combat.js";
 
 export const FOREST_ORIGIN = new THREE.Vector3(0, 0, 600);
-
-function addTree(group, x, z) {
-  const trunk = mesh(new THREE.CylinderGeometry(0.25, 0.35, 4.5, 8), mat(0x3a2a18, { roughness: 0.9 }));
-  trunk.position.set(x, 2.25, z);
-  const canopy = mesh(new THREE.SphereGeometry(1.8, 10, 8), mat(0x1a3020, { roughness: 0.88 }));
-  canopy.position.set(x, 5.2, z);
-  group.add(trunk, canopy);
-}
 
 export function buildForestLevel(game) {
   const group = new THREE.Group();
@@ -26,79 +18,60 @@ export function buildForestLevel(game) {
   const interactives = [];
   const enemies = [];
 
-  addGround(group, colliders, {
-    size: 90,
-    color: 0x2a3220,
-    texture: makeNoiseTexture(256, { base: [40, 55, 30], dirt: [35, 40, 25], variance: 20 }),
-    level: "forest",
-  });
+  const anim = buildForestWorld(game, group, colliders);
 
-  for (let i = 0; i < 40; i += 1) {
-    const x = (Math.random() - 0.5) * 70;
-    const z = (Math.random() - 0.5) * 70;
-    if (Math.hypot(x, z) < 4) continue;
-    addTree(group, x, z);
-  }
-
-  // Path markers
-  for (let i = 0; i < 12; i += 1) {
-    const stone = mesh(new THREE.BoxGeometry(1.2, 0.08, 1.2), mat(0x4a4a40, { roughness: 0.95 }));
-    stone.position.set(Math.sin(i * 0.4) * 2, 0.04, -20 + i * 4);
-    group.add(stone);
-  }
-
-  // Creatures
-  for (let i = 0; i < 4; i += 1) {
-    const creature = new THREE.Group();
-    const body = mesh(new THREE.SphereGeometry(0.45, 10, 8), mat(0x2a2218, { roughness: 0.8 }));
-    body.position.y = 0.5;
-    const eye = mesh(new THREE.SphereGeometry(0.08, 6, 6), mat(0xff2200, { emissive: 0xff1100, emissiveIntensity: 1.5 }));
-    eye.position.set(0.15, 0.6, 0.35);
-    creature.add(body, eye);
-    creature.position.set(-8 + i * 5, 0, -5 + (i % 2) * 8);
+  const creatureSpots = [
+    [-8, -5],
+    [-2, 4],
+    [6, -2],
+    [3, 10],
+  ];
+  for (const [x, z] of creatureSpots) {
+    const creature = createForestCreature();
+    creature.position.set(x, 0, z);
     group.add(creature);
     enemies.push(
       createEnemy({
         root: creature,
-        hp: 50,
-        damage: 10,
-        hitRadius: 0.8,
+        hp: 40,
+        damage: 8,
+        hitRadius: 2.0,
+        hitHeight: 1.0,
         name: "Forest Creature",
         speed: 2.4,
       })
     );
   }
 
-  const centaur = createNpcFigure({ robe: 0x4a3020, hair: 0x1a1a1a, skin: 0xc4a080, scale: 1.15 });
-  // crude horse body
-  const horse = mesh(new THREE.CapsuleGeometry(0.4, 0.9, 4, 8), mat(0x5a4030, { roughness: 0.85 }));
-  horse.position.set(0, 0.7, -0.5);
-  horse.rotation.z = Math.PI / 2;
-  centaur.add(horse);
+  const centaur = createFirenze();
   centaur.position.set(0, 0, 22);
   const cLabel = createNameLabel("Firenze");
-  cLabel.position.set(0, 2.4, 0);
-  cLabel.scale.set(2.2, 0.5, 1);
+  cLabel.position.set(0, 2.7, 0);
+  cLabel.scale.set(2.3, 0.5, 1);
   centaur.add(cLabel);
   group.add(centaur);
   interactives.push({ id: "firenze", root: centaur, label: "Speak with Firenze", range: 3 });
-  interactives.push({ id: "exit", root: centaur, label: "Leave the Forest", range: 3 });
 
-  // Cloak pickup
-  const cloak = mesh(new THREE.PlaneGeometry(1.2, 1.6), mat(0x8899aa, { roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.55 }));
-  cloak.position.set(6, 0.9, -10);
+  // Path out of the clearing — separate from Firenze so leave is always reachable
+  const exitAnchor = new THREE.Object3D();
+  exitAnchor.position.set(0, 0, 28);
+  group.add(exitAnchor);
+  const exitMarker = new THREE.Mesh(
+    new THREE.BoxGeometry(3.2, 3.6, 0.35),
+    new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.85 })
+  );
+  exitMarker.position.set(0, 1.8, 28);
+  group.add(exitMarker);
+  interactives.push({ id: "exit", root: exitAnchor, label: "Leave the Forest", range: 3.5 });
+
+  const cloak = createCloakProp();
+  cloak.position.set(6, 0, -10);
   cloak.rotation.y = 0.4;
   group.add(cloak);
   interactives.push({ id: "cloak", root: cloak, label: "Take the Invisibility Cloak", range: 2.4 });
 
-  const moon = new THREE.DirectionalLight(0x8899bb, 0.4);
-  moon.position.set(-10, 20, 5);
-  group.add(moon);
-  const ambientGlow = new THREE.PointLight(0x446655, 0.5, 25);
-  ambientGlow.position.set(0, 4, 0);
-  group.add(ambientGlow);
-
   group.position.copy(FOREST_ORIGIN);
+  worldOffsetColliders(colliders, FOREST_ORIGIN);
   game.scene.add(group);
   game.levelGroups.forest = group;
   game.levelColliders.forest = colliders;
@@ -108,6 +81,7 @@ export function buildForestLevel(game) {
     firenzeTalked: false,
     cloakTaken: false,
     cloak,
+    anim,
   };
 
   return { spawn: FOREST_ORIGIN.clone().add(new THREE.Vector3(0, 0, -22)) };
@@ -131,6 +105,8 @@ export function resetForestQuest(game) {
 export function updateForestLevel(game, delta, time) {
   const data = game.levelData.forest;
   if (!data || !game.player) return;
+  updateForestWorld(data.anim, time);
+
   const origin = FOREST_ORIGIN;
   const playerLocal = game.player.root.position.clone().sub(origin);
 
@@ -140,8 +116,6 @@ export function updateForestLevel(game, delta, time) {
     enemy.slow = Math.max(0, enemy.slow - delta);
     enemy.attackCd = Math.max(0, enemy.attackCd - delta);
     if (enemy.stun > 0) continue;
-
-    // Cloak stealth: ignore player if cloaked
     if (game.cloaked) continue;
 
     const toPlayer = playerLocal.clone().sub(enemy.root.position);

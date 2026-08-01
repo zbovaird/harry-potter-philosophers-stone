@@ -82,23 +82,78 @@ function buildWand() {
 }
 
 function addHair(head, character) {
-  const hairMat = mat(character.hair, { roughness: 0.92, envMapIntensity: 0.35 });
+  const hairMat = mat(character.hair, { roughness: 0.88, envMapIntensity: 0.3 });
+  const darkMat = mat(
+    new THREE.Color(character.hair).multiplyScalar(0.72).getHex(),
+    { roughness: 0.92, envMapIntensity: 0.25 }
+  );
+
   if (character.id === "hermione") {
-    for (let i = 0; i < 22; i += 1) {
-      const curl = mesh(new THREE.SphereGeometry(0.04 + Math.random() * 0.025, 10, 8), hairMat);
-      const a = (i / 22) * Math.PI * 2;
-      const r = 0.14 + (i % 3) * 0.02;
-      curl.position.set(Math.sin(a) * r, 0.06 + (i % 4) * 0.035, Math.cos(a) * r * 0.9);
+    // Bushy curly volume — scalp, mid-layer, shoulder-length ringlets
+    const scalp = mesh(new THREE.SphereGeometry(0.178, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
+    scalp.position.y = 0.05;
+    scalp.scale.set(1.08, 1.0, 1.05);
+    head.add(scalp);
+    for (let i = 0; i < 36; i += 1) {
+      const a = (i / 36) * Math.PI * 2;
+      const layer = i % 3;
+      const r = 0.15 + layer * 0.035;
+      const curl = mesh(
+        new THREE.SphereGeometry(0.038 + (i % 4) * 0.01, 10, 8),
+        i % 2 ? hairMat : darkMat
+      );
+      curl.position.set(
+        Math.sin(a) * r,
+        0.02 + layer * 0.05 + (i % 5) * 0.012,
+        Math.cos(a) * r * 0.95
+      );
+      curl.scale.set(1, 1.15 + (i % 3) * 0.1, 1);
       head.add(curl);
     }
+    // Longer hanging curls framing the face / shoulders
+    for (let i = 0; i < 14; i += 1) {
+      const a = -1.1 + (i / 13) * 2.2;
+      const ringlet = mesh(new THREE.CapsuleGeometry(0.028, 0.14 + (i % 3) * 0.04, 4, 8), hairMat);
+      ringlet.position.set(Math.sin(a) * 0.16, -0.08 - (i % 4) * 0.03, Math.cos(a) * 0.12);
+      ringlet.rotation.z = a * 0.25;
+      ringlet.rotation.x = 0.25;
+      head.add(ringlet);
+    }
   } else if (character.id === "luna") {
-    const cap = mesh(new THREE.SphereGeometry(0.175, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
-    cap.position.y = 0.05;
-    head.add(cap);
-    const braid = mesh(new THREE.CapsuleGeometry(0.032, 0.28, 4, 8), hairMat);
-    braid.position.set(0.13, -0.1, -0.04);
+    // Soft long waves + side braid
+    const scalp = mesh(new THREE.SphereGeometry(0.172, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMat);
+    scalp.position.y = 0.05;
+    head.add(scalp);
+    for (let i = 0; i < 10; i += 1) {
+      const a = -1.2 + (i / 9) * 2.4;
+      const wave = mesh(new THREE.CapsuleGeometry(0.03, 0.22 + (i % 3) * 0.05, 4, 8), hairMat);
+      wave.position.set(Math.sin(a) * 0.14, -0.12, Math.cos(a) * 0.11);
+      wave.rotation.z = a * 0.2;
+      head.add(wave);
+    }
+    const braid = mesh(new THREE.CapsuleGeometry(0.03, 0.32, 4, 8), darkMat);
+    braid.position.set(0.14, -0.14, -0.02);
+    braid.rotation.z = 0.35;
     head.add(braid);
-  } else if (character.id === "ron" || character.id === "ginny") {
+  } else if (character.id === "ginny") {
+    // Long wavy redhead hair
+    const scalp = mesh(new THREE.SphereGeometry(0.17, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMat);
+    scalp.position.y = 0.05;
+    head.add(scalp);
+    for (let i = 0; i < 12; i += 1) {
+      const a = -1.25 + (i / 11) * 2.5;
+      const strand = mesh(new THREE.CapsuleGeometry(0.026, 0.26 + (i % 4) * 0.04, 4, 8), i % 2 ? hairMat : darkMat);
+      strand.position.set(Math.sin(a) * 0.145, -0.14 - (i % 3) * 0.02, Math.cos(a) * 0.11);
+      strand.rotation.z = a * 0.22;
+      strand.rotation.x = 0.15;
+      head.add(strand);
+    }
+    for (let i = 0; i < 5; i += 1) {
+      const bang = mesh(new THREE.SphereGeometry(0.035, 8, 6), hairMat);
+      bang.position.set(-0.08 + i * 0.04, 0.1, 0.13);
+      head.add(bang);
+    }
+  } else if (character.id === "ron") {
     const cap = mesh(new THREE.SphereGeometry(0.17, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
     cap.position.y = 0.05;
     head.add(cap);

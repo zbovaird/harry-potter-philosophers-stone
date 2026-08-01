@@ -39,6 +39,10 @@ const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _wish = new THREE.Vector3();
 const _camOffset = new THREE.Vector3();
+const _camTarget = new THREE.Vector3();
+const _interactWorld = new THREE.Vector3();
+const HUD_INTERVAL = 0.1;
+const CONTEXT_INTERVAL = 0.12;
 
 function $(id) {
   return document.getElementById(id);
@@ -73,6 +77,14 @@ class Game {
     this.colliders = [];
     this.builtLevels = new Set();
     this.time = 0;
+    this._hudAccum = 0;
+    this._contextAccum = 0;
+    this._hotbarDirty = true;
+    this._lastActionLabel = "";
+    this._lastActionEnabled = null;
+    this._lastStatus = "";
+    this._lastHpCeil = -1;
+    this._lastManaCeil = -1;
 
     this.ui = {
       loading: $("loading"),
@@ -110,6 +122,8 @@ class Game {
       winTitle: $("win-title"),
       winText: $("win-text"),
       continueBtn: $("continue-btn"),
+      houseSelect: $("house-select"),
+      houseGrid: $("house-grid"),
     };
 
     this.initRenderer();
@@ -121,13 +135,16 @@ class Game {
   initRenderer() {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      antialias: false,
       powerPreference: "high-performance",
+      stencil: false,
+      depth: true,
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Cap DPR — retina 2x + bloom was a major hitch source
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.7;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -142,15 +159,16 @@ class Game {
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xffe0b8, 2.6);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(4096, 4096);
-    this.sun.shadow.camera.left = -35;
-    this.sun.shadow.camera.right = 35;
-    this.sun.shadow.camera.top = 35;
-    this.sun.shadow.camera.bottom = -35;
+    this.sun.shadow.mapSize.set(1024, 1024);
+    this.sun.shadow.camera.left = -28;
+    this.sun.shadow.camera.right = 28;
+    this.sun.shadow.camera.top = 28;
+    this.sun.shadow.camera.bottom = -28;
     this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = 100;
-    this.sun.shadow.bias = -0.00025;
-    this.sun.shadow.normalBias = 0.035;
+    this.sun.shadow.camera.far = 90;
+    this.sun.shadow.bias = -0.00035;
+    this.sun.shadow.normalBias = 0.04;
+    this.sun.shadow.autoUpdate = true;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
 
@@ -217,6 +235,31 @@ class Game {
     this.canvas.addEventListener("click", () => {
       if (this.state === "playing") this.input.requestPointerLock(this.canvas);
     });
+    this.ui.houseGrid?.querySelectorAll(".house-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this.confirmHouse(btn.dataset.house));
+    });
+  }
+
+  openHouseSelect() {
+    this.state = "houseSelect";
+    this.input.disable();
+    this.ui.houseSelect.classList.remove("hidden");
+  }
+
+  confirmHouse(house) {
+    if (!house) return;
+    const data = this.levelData.hogwarts;
+    if (!data) return;
+    data.sorted = true;
+    data.house = house;
+    this.progress = saveProgress({ house });
+    this.ui.houseSelect.classList.add("hidden");
+    this.state = "playing";
+    this.input.enable();
+    this.input.requestPointerLock(this.canvas);
+    this.showMessage(`Sorting Hat: "Better be… ${house}!" Explore the castle courtyard, then leave when ready.`);
+    this.updateObjective();
+    this.audio.ui();
   }
 
   showCharacterSelect() {
@@ -285,6 +328,7 @@ class Game {
     this.ui.actionsMenu.classList.add("hidden");
     this.ui.controlsHelp.classList.add("hidden");
     this.ui.message.classList.add("hidden");
+    this.ui.houseSelect?.classList.add("hidden");
   }
 
   showGameplayUi() {
@@ -397,7 +441,8 @@ class Game {
       `;
       slot.addEventListener("click", () => {
         this.caster.selectIndex(i);
-        this.refreshHotbarUi();
+        this.markHotbarDirty();
+        this.refreshHotbarUi(true);
       });
       bar.appendChild(slot);
     }
@@ -405,17 +450,24 @@ class Game {
     // Extra utility row note in status — full book via wheel beyond 10? Plan says full list.
     // Expose remaining spells by cycling through ALL spells with Q/wheel beyond hotbar:
     this.fullSpellIndex = 0;
+    this._hotbarDirty = true;
   }
 
-  refreshHotbarUi() {
+  refreshHotbarUi(force = false) {
     if (!this.caster) return;
+    if (!force && !this._hotbarDirty) return;
+    this._hotbarDirty = false;
     const slots = this.ui.spellHotbar.querySelectorAll(".spell-slot");
     slots.forEach((slot, i) => {
       slot.classList.toggle("active", i === this.caster.selected);
       const spell = getSpell(this.caster.hotbar[i]);
       const cd = this.caster.cooldowns[spell.id] || 0;
-      slot.classList.toggle("on-cooldown", cd > 0);
+      slot.classList.toggle("on-cooldown", cd > 0.05);
     });
+  }
+
+  markHotbarDirty() {
+    this._hotbarDirty = true;
   }
 
   updateObjective() {
@@ -424,29 +476,28 @@ class Game {
       diagon: () => {
         if (!data.ollivanderTalked) return "Talk to Ollivander.";
         if (!data.wandClaimed) return "Claim your wand from the pedestal.";
-        if (data.dummiesHit < 3) return `Hit the training dummies (${data.dummiesHit}/3) — press R to cycle the full spell book.`;
-        if (!data.leviosaDone) return "Select Wingardium Leviosa (R to cycle) and levitate the feather.";
+        if (data.dummiesHit < 5) return `Practice on the dummies (${data.dummiesHit}/5) — try different hotbar spells (1–0).`;
+        if (!data.leviosaDone) return "Levitate the feather — press E near it, or cast Wingardium Leviosa (key 5).";
         return "Reach the gate at the far end of the alley.";
       },
       hogwarts: () => {
         if (!data.mcgTalked) return "Speak with Professor McGonagall.";
-        if (!data.sorted) return "Sit for the Sorting Hat.";
-        return "Exit through the Great Hall doors.";
+        if (!data.sorted) return "Sit for the Sorting Hat and choose your house.";
+        return `Explore ${data.house || "your house"} — wander the courtyard, then leave through the Great Hall doors.`;
       },
       troll: () => {
-        if (data.troll.alive) return "Defeat the mountain troll! Stupefy / Leviosa / Expelliarmus.";
+        if (data.troll.alive) return "Defeat the mountain troll! Aim and cast Stupefy / Expelliarmus.";
         if (!data.hermioneChecked) return "Check on Hermione.";
-        return "Escort Hermione out of the bathroom.";
+        return "Leave through the bathroom exit door (south wall).";
       },
       forest: () => {
-        if (!data.cloakTaken) return "Optional: find the Invisibility Cloak. Reach Firenze in the clearing.";
-        if (!data.firenzeTalked) return "Speak with Firenze.";
-        return "Leave the Forbidden Forest.";
+        if (!data.firenzeTalked) return "Reach Firenze in the clearing and speak with him. (Cloak optional.)";
+        return "Leave through the forest gate beyond Firenze.";
       },
       trapdoor: () => {
-        if (!data.snareCleared) return "Clear the Devil's Snare with Incendio or Lumos.";
-        if (!data.keyCaught) return "Accio a flying key.";
-        if (!data.chessCleared) return "Defeat the enchanted chess pieces.";
+        if (!data.snareCleared) return "Shoot Incendio (7) at the Devil's Snare.";
+        if (!data.keyCaught) return "Select Accio (0) and summon a flying key.";
+        if (!data.chessCleared) return "Freeze the chess pieces with Petrificus Totalus (6).";
         return "Continue through the exit door.";
       },
       quirrell: () => {
@@ -476,14 +527,16 @@ class Game {
     let best = null;
     let bestDist = Infinity;
     const pos = this.player.root.position;
+    const data = this.levelData[this.currentLevel];
     for (const item of this.getInteractives()) {
-      const world = new THREE.Vector3();
-      item.root.getWorldPosition(world);
-      // For groups, use position
-      if (!item.root.isSprite && item.root.position) {
-        world.copy(item.root.getWorldPosition(new THREE.Vector3()));
-      }
-      const dist = pos.distanceTo(world);
+      // Skip one-shot talks once done so exit anchors can win
+      if (item.id === "firenze" && data?.firenzeTalked) continue;
+      if (item.id === "hermione" && data?.hermioneChecked && data?.troll && !data.troll.alive) continue;
+      if (item.id === "mirror" && data?.mirrorSeen && data?.quirrell && !data.quirrell.alive) continue;
+      if (item.id === "sortingHat" && data?.sorted) continue;
+      if (item.id === "snare" && data?.snareCleared) continue;
+      item.root.getWorldPosition(_interactWorld);
+      const dist = pos.distanceTo(_interactWorld);
       if (dist < (item.range || 2.5) && dist < bestDist) {
         best = item;
         bestDist = dist;
@@ -495,8 +548,12 @@ class Game {
   updateContextAction() {
     const near = this.nearestInteractive();
     if (!near) {
-      this.ui.actionBtn.disabled = true;
-      this.ui.actionLabel.textContent = "Nothing nearby";
+      if (this._lastActionLabel !== "Nothing nearby") {
+        this.ui.actionBtn.disabled = true;
+        this.ui.actionLabel.textContent = "Nothing nearby";
+        this._lastActionLabel = "Nothing nearby";
+        this._lastActionEnabled = false;
+      }
       return null;
     }
     // Gate some actions by quest state
@@ -504,7 +561,7 @@ class Game {
     let label = near.label;
     let enabled = true;
     if (this.currentLevel === "diagon" && near.id === "exit") {
-      enabled = data.wandClaimed && data.dummiesHit >= 3 && data.leviosaDone;
+      enabled = data.wandClaimed && data.dummiesHit >= 5 && data.leviosaDone;
       if (!enabled) label = "Complete Ollivander's trials first";
     }
     if (this.currentLevel === "hogwarts" && near.id === "exit") {
@@ -527,8 +584,12 @@ class Game {
       enabled = !data.quirrell.alive && data.mirrorSeen;
       if (!enabled) label = data.mirrorSeen ? "Defeat Quirrell first" : "Look in the Mirror first";
     }
-    this.ui.actionBtn.disabled = !enabled;
-    this.ui.actionLabel.textContent = label;
+    if (label !== this._lastActionLabel || enabled !== this._lastActionEnabled) {
+      this.ui.actionBtn.disabled = !enabled;
+      this.ui.actionLabel.textContent = label;
+      this._lastActionLabel = label;
+      this._lastActionEnabled = enabled;
+    }
     return enabled ? near : null;
   }
 
@@ -545,17 +606,16 @@ class Game {
       } else if (near.id === "wand") {
         data.wandClaimed = true;
         data.lumosDone = true;
+        const ped = data.pedestal?.userData;
+        if (ped?.wand) ped.wand.visible = false;
+        if (ped?.tip) ped.tip.visible = false;
+        if (ped?.glow) ped.glow.visible = false;
         this.showMessage("The wand warms in your hand. Spells answer your call.");
       } else if (near.id === "feather") {
-        const spell = this.caster.getSelectedSpell();
-        if (spell?.id === "leviosa" || spell?.effect === "levitate") {
-          data.leviosaDone = true;
-          this.showMessage("Wingardium Leviosa! The feather rises.");
-        } else {
-          this.showMessage("Select Wingardium Leviosa and try again.");
-          return;
-        }
-      } else if (near.id === "exit" && data.wandClaimed && data.dummiesHit >= 3 && data.leviosaDone) {
+        // Level 1: E near the feather completes Leviosa — no spellbook cycling required
+        data.leviosaDone = true;
+        this.showMessage("Wingardium Leviosa! The feather rises.");
+      } else if (near.id === "exit" && data.wandClaimed && data.dummiesHit >= 5 && data.leviosaDone) {
         this.completeLevel();
         return;
       }
@@ -566,9 +626,12 @@ class Game {
         data.mcgTalked = true;
         this.showMessage("McGonagall: \"Welcome to Hogwarts. The Sorting Hat awaits.\"");
       } else if (near.id === "sortingHat") {
-        data.sorted = true;
-        const house = ["Gryffindor", "Ravenclaw", "Hufflepuff", "Slytherin"][Math.floor(Math.random() * 4)];
-        this.showMessage(`Sorting Hat: "Hmm… better be… ${house}!"`);
+        if (data.sorted) {
+          this.showMessage(`Sorting Hat: "Already sorted — ${data.house || "your house"}! Wander the courtyard north of the Hall."`);
+        } else {
+          this.openHouseSelect();
+          return;
+        }
       } else if (near.id === "exit" && data.sorted) {
         this.completeLevel();
         return;
@@ -608,15 +671,8 @@ class Game {
 
     if (this.currentLevel === "trapdoor") {
       if (near.id === "snare") {
-        const spell = this.caster.getSelectedSpell();
-        if (spell && (spell.id === "incendio" || spell.id === "lumos" || spell.effect === "burn" || spell.effect === "light")) {
-          data.snareCleared = true;
-          data.snare.visible = false;
-          this.showMessage("The Devil's Snare recoils from the light and heat!");
-        } else {
-          this.showMessage("Use Incendio or Lumos on the vines.");
-          return;
-        }
+        this.showMessage("Cast Incendio (7) and shoot the vines — no need to press E.");
+        return;
       } else if (near.id === "keys") {
         const spell = this.caster.getSelectedSpell();
         if (spell && (spell.id === "accio" || spell.effect === "pull")) {
@@ -755,14 +811,38 @@ class Game {
       return;
     }
 
+    // Kid-friendly aim assist — pull shots toward nearby enemies in front
+    const assisted = aim.clone();
+    const assist = this.combat.aimAssist || 1;
+    let bestEnemy = null;
+    let bestScore = 0.28 / assist;
+    for (const e of this.getActiveEnemies()) {
+      if (!e.alive) continue;
+      e.root.getWorldPosition(_interactWorld);
+      _interactWorld.y += e.hitHeight ?? 1.1;
+      const dist = _interactWorld.distanceTo(tip);
+      if (dist < 0.5 || dist > 24) continue;
+      const to = _interactWorld.clone().sub(tip).normalize();
+      const score = to.dot(aim);
+      if (score > bestScore) {
+        bestScore = score;
+        bestEnemy = e;
+      }
+    }
+    if (bestEnemy) {
+      bestEnemy.root.getWorldPosition(_interactWorld);
+      _interactWorld.y += bestEnemy.hitHeight ?? 1.1;
+      assisted.copy(_interactWorld).sub(tip).normalize();
+    }
+
     // Projectile
     this.bolts.spawn({
       origin: tip,
-      direction: aim,
+      direction: assisted,
       color: spell.color,
       speed: spell.speed,
       life: spell.life,
-      radius: 0.14,
+      radius: 0.22,
       spellId: spell.id,
       damage: spell.damage * this.combat.damageMul,
     });
@@ -788,16 +868,12 @@ class Game {
       }
       this.caster.lumosLight.visible = true;
       this.showMessage("Lumos!", 1);
-      // Trapdoor snare auto if close
       if (this.currentLevel === "trapdoor") {
         const data = this.levelData.trapdoor;
-        const snare = data.interactives.find((i) => i.id === "snare");
-        if (snare && !data.snareCleared) {
-          const world = snare.root.getWorldPosition(new THREE.Vector3());
-          if (this.player.root.position.distanceTo(world) < 5) {
-            data.snareCleared = true;
-            data.snare.visible = false;
-            this.showMessage("Light drives back the Devil's Snare!");
+        if (data && !data.snareCleared && data.snare) {
+          const world = data.snare.getWorldPosition(_interactWorld);
+          if (this.player.root.position.distanceTo(world) < 6) {
+            this.clearDevilSnare("Light drives back the Devil's Snare!");
           }
         }
       }
@@ -845,19 +921,33 @@ class Game {
         return;
       }
     }
-    if (spell.effect === "burn" || spell.id === "incendio") {
-      if (this.currentLevel === "trapdoor") {
-        const data = this.levelData.trapdoor;
-        if (!data.snareCleared) {
-          data.snareCleared = true;
-          data.snare.visible = false;
-          this.showMessage("Incendio clears the Snare!");
-          this.updateObjective();
-          return;
-        }
+    this.showMessage(`${spell.name}!`, 1);
+  }
+
+  clearDevilSnare(message = "The Devil's Snare recoils from the heat!") {
+    const data = this.levelData.trapdoor;
+    if (!data || data.snareCleared) return false;
+    data.snareCleared = true;
+    if (data.snare) data.snare.visible = false;
+    this.showMessage(message);
+    this.updateObjective();
+    return true;
+  }
+
+  checkEnvironmentSpellHits() {
+    if (this.currentLevel !== "trapdoor") return;
+    const data = this.levelData.trapdoor;
+    if (!data || data.snareCleared || !data.snare) return;
+    data.snare.getWorldPosition(_interactWorld);
+    for (const bolt of this.bolts.active) {
+      const spell = getSpell(bolt.spellId);
+      if (!spell || (spell.id !== "incendio" && spell.effect !== "burn")) continue;
+      if (bolt.mesh.position.distanceTo(_interactWorld) < 5.5) {
+        this.clearDevilSnare("Incendio burns back the Devil's Snare!");
+        bolt.life = 0;
+        break;
       }
     }
-    this.showMessage(`${spell.name}!`, 1);
   }
 
   onEnemyHit(enemy, spell) {
@@ -868,6 +958,7 @@ class Game {
       enemy.root.visible = enemy.training ? false : true;
       if (enemy.training && this.currentLevel === "diagon") {
         this.levelData.diagon.dummiesHit += 1;
+        enemy.respawnAt = this.time + 2.2;
         this.updateObjective();
       }
       if (this.currentLevel === "troll" && enemy === this.levelData.troll.troll) {
@@ -878,15 +969,34 @@ class Game {
         this.showMessage("Quirrell falls — the Stone is yours to claim!");
         this.updateObjective();
       }
+      if (this.currentLevel === "trapdoor") {
+        const pieces = this.levelData.trapdoor.enemies;
+        if (pieces.every((e) => !e.alive)) {
+          this.levelData.trapdoor.chessCleared = true;
+          this.showMessage("The chess board falls silent.");
+        }
+        this.updateObjective();
+      }
+      if (this.currentLevel === "forest") {
+        this.updateObjective();
+      }
     }
   }
 
   updateHud() {
     if (!this.combat) return;
-    this.ui.healthText.textContent = `${Math.ceil(this.combat.hp)} / ${this.combat.maxHp}`;
-    this.ui.healthFill.style.width = `${(this.combat.hp / this.combat.maxHp) * 100}%`;
-    this.ui.manaText.textContent = `${Math.ceil(this.combat.mana)} / ${this.combat.maxMana}`;
-    this.ui.manaFill.style.width = `${(this.combat.mana / this.combat.maxMana) * 100}%`;
+    const hpCeil = Math.ceil(this.combat.hp);
+    const manaCeil = Math.ceil(this.combat.mana);
+    if (hpCeil !== this._lastHpCeil) {
+      this._lastHpCeil = hpCeil;
+      this.ui.healthText.textContent = `${hpCeil} / ${this.combat.maxHp}`;
+      this.ui.healthFill.style.width = `${(this.combat.hp / this.combat.maxHp) * 100}%`;
+    }
+    if (manaCeil !== this._lastManaCeil) {
+      this._lastManaCeil = manaCeil;
+      this.ui.manaText.textContent = `${manaCeil} / ${this.combat.maxMana}`;
+      this.ui.manaFill.style.width = `${(this.combat.mana / this.combat.maxMana) * 100}%`;
+    }
     this.fx.setLowHealth(this.combat.hp / this.combat.maxHp < 0.3 ? 1 - this.combat.hp / this.combat.maxHp : 0);
 
     const bossLevels = ["troll", "quirrell"];
@@ -896,14 +1006,28 @@ class Game {
       this.ui.bossName.textContent = boss.name;
       this.ui.bossHealthText.textContent = `${Math.max(0, Math.ceil(boss.hp))} / ${boss.maxHp}`;
       this.ui.bossHealthFill.style.width = `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
-    } else {
+    } else if (!this.ui.bossHealth.classList.contains("hidden")) {
       this.ui.bossHealth.classList.add("hidden");
     }
 
     const spell = this.caster?.getSelectedSpell();
-    this.ui.status.textContent = spell
+    const status = spell
       ? `Spell: ${spell.name} · Mana ${spell.mana} · CD ${(this.caster.cooldowns[spell.id] || 0).toFixed(1)}s`
       : "Spells ready";
+    if (status !== this._lastStatus) {
+      this._lastStatus = status;
+      this.ui.status.textContent = status;
+    }
+
+    // Cooldown rings need occasional hotbar refresh
+    let anyCd = false;
+    for (const id of this.caster.hotbar) {
+      if ((this.caster.cooldowns[id] || 0) > 0) {
+        anyCd = true;
+        break;
+      }
+    }
+    if (anyCd) this._hotbarDirty = true;
   }
 
   resolveCollisions(pos) {
@@ -958,13 +1082,13 @@ class Game {
     const wheel = this.input.consumeWheel();
     if (wheel) {
       this.caster.cycle(Math.sign(wheel));
-      this.refreshHotbarUi();
+      this.markHotbarDirty();
     }
     for (let i = 0; i < 10; i += 1) {
       const code = i === 9 ? "Digit0" : `Digit${i + 1}`;
       if (this.input.wasPressed(code)) {
         this.caster.selectIndex(i);
-        this.refreshHotbarUi();
+        this.markHotbarDirty();
       }
     }
 
@@ -974,7 +1098,7 @@ class Game {
       const next = SPELLS[this.fullSpellIndex];
       this.caster.hotbar[this.caster.selected] = next.id;
       this.buildSpellHotbar();
-      this.refreshHotbarUi();
+      this.markHotbarDirty();
       this.showMessage(`Ready: ${next.name}`, 1);
     }
 
@@ -1045,10 +1169,10 @@ class Game {
       height + Math.sin(this.cameraPitch) * dist * 0.85,
       -Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist
     );
-    const target = this.player.root.position.clone().add(new THREE.Vector3(0, 1.35, 0));
-    this.camera.position.copy(target).add(_camOffset);
+    _camTarget.set(this.player.root.position.x, this.player.root.position.y + 1.35, this.player.root.position.z);
+    this.camera.position.copy(_camTarget).add(_camOffset);
     this.camera.position.add(this.fx.shakeOffset);
-    this.camera.lookAt(target);
+    this.camera.lookAt(_camTarget);
     this.camera.rotation.z += this.fx.shakeRoll;
     this.sun.target.position.copy(this.player.root.position);
     this.sun.position.copy(this.atmosphere.sunDirection).multiplyScalar(60).add(this.player.root.position);
@@ -1075,6 +1199,7 @@ class Game {
         this.onEnemyHit(target, spell);
       }
     }
+    this.checkEnvironmentSpellHits();
 
     if (!this.combat.alive) {
       this.showMessage("You have fallen… Restarting level.", 2);
@@ -1104,13 +1229,23 @@ class Game {
     if (this.state === "playing") {
       this.updatePlayer(delta);
       this.updateLevels(delta);
-      this.updateContextAction();
-      this.updateHud();
+
+      this._contextAccum += delta;
+      if (this._contextAccum >= CONTEXT_INTERVAL) {
+        this._contextAccum = 0;
+        this.updateContextAction();
+      }
+
+      this._hudAccum += delta;
+      if (this._hudAccum >= HUD_INTERVAL) {
+        this._hudAccum = 0;
+        this.updateHud();
+      }
       this.refreshHotbarUi();
     }
 
     this.fx.update(delta, this.time);
-    this.updateCamera();
+    if (this.player) this.updateCamera();
     this.fx.render();
     this.input.endFrame();
   }

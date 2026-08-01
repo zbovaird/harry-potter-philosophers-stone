@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import {
-  addGround,
-  addWallBox,
-  makeStoneTexture,
-  mat,
-  mesh,
-} from "../worldUtils.js";
+  buildTrapdoorWorld,
+  updateTrapdoorWorld,
+  createDevilsSnare,
+  createFlyingKey,
+  createChessPiece,
+} from "../trapdoorProps.js";
+import { mat, mesh, worldOffsetColliders } from "../worldUtils.js";
 import { createEnemy } from "../combat.js";
 
 export const TRAPDOOR_ORIGIN = new THREE.Vector3(0, 0, 800);
@@ -17,82 +18,58 @@ export function buildTrapdoorLevel(game) {
   const interactives = [];
   const enemies = [];
 
-  addGround(group, colliders, {
-    size: 70,
-    color: 0x2a2a30,
-    texture: makeStoneTexture(),
-    level: "trapdoor",
-  });
+  const anim = buildTrapdoorWorld(game, group, colliders);
 
-  // Room separators with center doorway gaps (side walls only)
-  addWallBox(group, colliders, { x: -10, y: 3, z: -8, w: 10, h: 6, d: 1, color: 0x3a3a44, level: "trapdoor" });
-  addWallBox(group, colliders, { x: 10, y: 3, z: -8, w: 10, h: 6, d: 1, color: 0x3a3a44, level: "trapdoor" });
-  addWallBox(group, colliders, { x: -10, y: 3, z: 8, w: 10, h: 6, d: 1, color: 0x3a3a44, level: "trapdoor" });
-  addWallBox(group, colliders, { x: 10, y: 3, z: 8, w: 10, h: 6, d: 1, color: 0x3a3a44, level: "trapdoor" });
-  // Outer boundary walls
-  addWallBox(group, colliders, { x: 0, y: 3, z: -32, w: 40, h: 6, d: 1, color: 0x2a2a34, level: "trapdoor" });
-  addWallBox(group, colliders, { x: 0, y: 3, z: 32, w: 40, h: 6, d: 1, color: 0x2a2a34, level: "trapdoor" });
-  addWallBox(group, colliders, { x: -20, y: 3, z: 0, w: 1, h: 6, d: 64, color: 0x2a2a34, level: "trapdoor" });
-  addWallBox(group, colliders, { x: 20, y: 3, z: 0, w: 1, h: 6, d: 64, color: 0x2a2a34, level: "trapdoor" });
-
-  // Devil's Snare
-  const snare = new THREE.Group();
-  for (let i = 0; i < 12; i += 1) {
-    const vine = mesh(
-      new THREE.CapsuleGeometry(0.08, 1.5 + Math.random(), 4, 6),
-      mat(0x2a4a28, { roughness: 0.9 })
-    );
-    vine.position.set((Math.random() - 0.5) * 6, 0.8, -18 + (Math.random() - 0.5) * 4);
-    vine.rotation.z = (Math.random() - 0.5) * 0.8;
-    snare.add(vine);
-  }
+  // Devil's Snare room
+  const snare = createDevilsSnare();
+  snare.position.set(0, 0, -20);
   group.add(snare);
-  interactives.push({ id: "snare", root: snare, label: "Burn the Devil's Snare (Incendio / Lumos)", range: 4 });
+  interactives.push({
+    id: "snare",
+    root: snare,
+    label: "Shoot Incendio at the Devil's Snare",
+    range: 5.5,
+  });
 
   // Flying keys
   const keys = [];
-  for (let i = 0; i < 8; i += 1) {
-    const key = mesh(new THREE.BoxGeometry(0.15, 0.08, 0.4), mat(0xd4af37, { metalness: 0.9, roughness: 0.3, emissive: 0x553300, emissiveIntensity: 0.4 }));
-    key.position.set((Math.random() - 0.5) * 10, 1.5 + Math.random() * 2, 0);
+  for (let i = 0; i < 10; i += 1) {
+    const key = createFlyingKey();
+    key.position.set((Math.random() - 0.5) * 12, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4);
     group.add(key);
     keys.push({ mesh: key, phase: Math.random() * Math.PI * 2, caught: false });
   }
-  interactives.push({ id: "keys", root: keys[0].mesh, label: "Accio the correct key", range: 8 });
+  interactives.push({ id: "keys", root: keys[0].mesh, label: "Accio the correct key", range: 9 });
 
-  // Chess pieces as enemies
+  // Chess pieces
+  const types = ["rook", "knight", "queen", "knight", "pawn"];
   for (let i = 0; i < 5; i += 1) {
-    const piece = new THREE.Group();
-    const base = mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.3, 8), mat(0x1a1a1a, { roughness: 0.6 }));
-    const body = mesh(new THREE.ConeGeometry(0.3, 1.2, 8), mat(i % 2 ? 0xf0f0f0 : 0x1a1a1a, { roughness: 0.5 }));
-    body.position.y = 0.75;
-    piece.add(base, body);
-    piece.position.set(-6 + i * 3, 0, 16);
+    const piece = createChessPiece(i % 2 === 0, types[i]);
+    piece.position.set(-6 + i * 3, 0, 18);
     group.add(piece);
     enemies.push(
       createEnemy({
         root: piece,
-        hp: 60,
-        damage: 12,
-        hitRadius: 0.7,
+        hp: 35,
+        damage: 10,
+        hitRadius: 2.2,
+        hitHeight: 1.2,
         name: "Chess Piece",
-        speed: 1.8,
+        speed: 1.6,
       })
     );
   }
 
-  const exitDoor = mesh(new THREE.BoxGeometry(2, 3, 0.4), mat(0x5a3a20, { roughness: 0.7 }));
-  exitDoor.position.set(0, 1.5, 28);
+  const exitDoor = mesh(
+    new THREE.BoxGeometry(2.4, 3.4, 0.4),
+    game.textures ? game.textures.wood(1, 2) : mat(0x5a3a20, { roughness: 0.7 })
+  );
+  exitDoor.position.set(0, 1.7, 30);
   group.add(exitDoor);
   interactives.push({ id: "exit", root: exitDoor, label: "Descend deeper", range: 3 });
 
-  const light = new THREE.PointLight(0x8899aa, 0.8, 35);
-  light.position.set(0, 5, 0);
-  group.add(light);
-  const snareLight = new THREE.PointLight(0x335522, 0.5, 15);
-  snareLight.position.set(0, 2, -18);
-  group.add(snareLight);
-
   group.position.copy(TRAPDOOR_ORIGIN);
+  worldOffsetColliders(colliders, TRAPDOOR_ORIGIN);
   game.scene.add(group);
   game.levelGroups.trapdoor = group;
   game.levelColliders.trapdoor = colliders;
@@ -104,9 +81,10 @@ export function buildTrapdoorLevel(game) {
     snareCleared: false,
     keyCaught: false,
     chessCleared: false,
+    anim,
   };
 
-  return { spawn: TRAPDOOR_ORIGIN.clone().add(new THREE.Vector3(0, 0, -26)) };
+  return { spawn: TRAPDOOR_ORIGIN.clone().add(new THREE.Vector3(0, 0, -28)) };
 }
 
 export function resetTrapdoorQuest(game) {
@@ -131,18 +109,24 @@ export function resetTrapdoorQuest(game) {
 export function updateTrapdoorLevel(game, delta, time) {
   const data = game.levelData.trapdoor;
   if (!data || !game.player) return;
+  updateTrapdoorWorld(data.anim, time);
 
   if (!data.snareCleared) {
     data.snare.children.forEach((vine, i) => {
-      vine.rotation.z = Math.sin(time * 2 + i) * 0.35;
+      if (vine.isMesh) vine.rotation.z = Math.sin(time * 2 + i) * 0.35;
     });
   }
 
   for (const key of data.keys) {
     if (key.caught) continue;
-    key.mesh.position.y = 1.5 + Math.sin(time * 2 + key.phase) * 0.8;
-    key.mesh.position.x += Math.sin(time + key.phase) * delta * 1.5;
+    key.mesh.position.y = 1.5 + Math.sin(time * 2 + key.phase) * 0.9;
+    key.mesh.position.x += Math.sin(time + key.phase) * delta * 1.6;
     key.mesh.rotation.y += delta * 3;
+    const wings = key.mesh.userData.wings;
+    if (wings) {
+      wings[0].rotation.z = 0.3 + Math.sin(time * 20 + key.phase) * 0.5;
+      wings[1].rotation.z = -0.3 - Math.sin(time * 20 + key.phase) * 0.5;
+    }
   }
 
   data.chessCleared = data.enemies.every((e) => !e.alive);
@@ -175,5 +159,5 @@ export function updateTrapdoorLevel(game, delta, time) {
 }
 
 export function trapdoorSpawn() {
-  return TRAPDOOR_ORIGIN.clone().add(new THREE.Vector3(0, 0, -26));
+  return TRAPDOOR_ORIGIN.clone().add(new THREE.Vector3(0, 0, -28));
 }

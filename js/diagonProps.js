@@ -97,11 +97,7 @@ function addWindow(root, { x, y, z, w, h, timber, glow, rotY = 0, light = false 
   sill.position.set(x, y - h / 2 - 0.04, z + 0.04);
   if (Math.abs(rotY) > 0.1) sill.rotation.y = rotY;
   root.add(sill);
-  if (light) {
-    const pt = new THREE.PointLight(0xffc080, 0.7, 8, 2);
-    pt.position.set(x, y, z + 0.6);
-    root.add(pt);
-  }
+  // Emissive glass only — real PointLights per window crush FPS
 }
 
 /**
@@ -404,15 +400,10 @@ export function createGasLamp() {
   );
   glass.position.y = 3.4;
 
-  const light = new THREE.PointLight(0xffc888, 1.6, 14, 1.8);
-  light.position.y = 3.4;
-  light.castShadow = true;
-  light.shadow.mapSize.set(512, 512);
-  light.shadow.bias = -0.002;
-
-  root.add(base, pole, collar, cage, glass, light);
-  root.userData.light = light;
+  // Light added by caller only for a subset of lamps (perf)
+  root.add(base, pole, collar, cage, glass);
   root.userData.glass = glass;
+  root.userData.lightAnchor = glass.position;
   return root;
 }
 
@@ -692,8 +683,8 @@ export function buildDiagonWorld(game, group, colliders) {
   // Actually: rotY = -PI/2 maps local +Z to world +X. Good for left (x negative).
   // Right (x positive): door faces -X → rotY = +PI/2 maps +Z to -X. Good.
 
-  // Street lamps
-  for (const [lx, lz] of [
+  // Street lamps — geometry on all, real lights on every other (shadows off)
+  const lampSpots = [
     [-3.6, 16],
     [3.6, 16],
     [-3.6, 8],
@@ -704,12 +695,20 @@ export function buildDiagonWorld(game, group, colliders) {
     [3.6, -8],
     [-3.6, -16],
     [3.6, -16],
-  ]) {
+  ];
+  lampSpots.forEach(([lx, lz], i) => {
     const lamp = createGasLamp();
     lamp.position.set(lx, 0, lz);
+    if (i % 2 === 0) {
+      const light = new THREE.PointLight(0xffc888, 1.15, 12, 2);
+      light.position.set(0, 3.4, 0);
+      light.castShadow = false;
+      lamp.add(light);
+      lamp.userData.light = light;
+    }
     group.add(lamp);
     anim.lamps.push(lamp);
-  }
+  });
 
   // Props clusters
   const propRng = seeded(99);
@@ -793,16 +792,14 @@ export function buildDiagonWorld(game, group, colliders) {
   bounce.position.set(-8, 12, 4);
   group.add(bounce);
 
-  // God-ray-ish warm key from alley mouth
-  const key = new THREE.SpotLight(0xffe2b0, 1.8, 55, Math.PI / 5, 0.55, 1.2);
+  // Soft fill from alley mouth (no spotlight shadows)
+  const key = new THREE.DirectionalLight(0xffe2b0, 0.55);
   key.position.set(0, 14, 28);
-  key.target.position.set(0, 0, 0);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  group.add(key, key.target);
+  key.castShadow = false;
+  group.add(key);
 
-  // Magic dust motes
-  const dust = createMagicDust(100);
+  // Magic dust motes (lighter count)
+  const dust = createMagicDust(40);
   group.add(dust);
   anim.dust = dust;
 

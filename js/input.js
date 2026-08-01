@@ -1,3 +1,7 @@
+function clamp(v, min, max) {
+  return v < min ? min : v > max ? max : v;
+}
+
 const GAME_KEYS = new Set([
   "Space",
   "KeyW",
@@ -36,10 +40,12 @@ export class Input {
     this.wheelDelta = 0;
     this.pointerLocked = false;
     this.attackClicked = false;
-    this.aimHeld = false;
+    this._canvas = null;
   }
 
   bind(canvas) {
+    this._canvas = canvas;
+
     window.addEventListener("keydown", (event) => {
       if (!this.enabled) return;
       if (GAME_KEYS.has(event.code)) event.preventDefault();
@@ -53,32 +59,46 @@ export class Input {
 
     window.addEventListener("blur", () => {
       this.keys.clear();
-      this.aimHeld = false;
     });
 
     document.addEventListener("mousemove", (event) => {
       if (!this.enabled || !this.pointerLocked) return;
-      this.mouseDeltaX += event.movementX || 0;
-      this.mouseDeltaY += event.movementY || 0;
+      // Clamp spikes (OS context-menu / lock transitions often dump huge deltas)
+      const dx = clamp(event.movementX || 0, -80, 80);
+      const dy = clamp(event.movementY || 0, -80, 80);
+      this.mouseDeltaX += dx;
+      this.mouseDeltaY += dy;
+    });
+
+    // Block context menu / middle-click chrome while playing (RMB was unused and
+    // often released pointer-lock or opened the browser menu → hitching).
+    const blockSecondary = (event) => {
+      if (!this.enabled) return;
+      if (event.button === 2 || event.button === 1 || event.type === "contextmenu" || event.type === "auxclick") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    canvas.addEventListener("contextmenu", blockSecondary);
+    canvas.addEventListener("auxclick", blockSecondary);
+    document.addEventListener("contextmenu", (event) => {
+      if (this.enabled && this.pointerLocked) event.preventDefault();
     });
 
     canvas.addEventListener("mousedown", (event) => {
-      if (!this.enabled || !this.pointerLocked) return;
-      if (event.button === 0) {
+      if (!this.enabled) return;
+      // Ignore right / middle entirely
+      if (event.button !== 0) {
         event.preventDefault();
-        this.attackClicked = true;
+        return;
       }
-      if (event.button === 2) {
-        event.preventDefault();
-        this.aimHeld = true;
+      event.preventDefault();
+      if (!this.pointerLocked) {
+        this.requestPointerLock(canvas);
+        return;
       }
+      this.attackClicked = true;
     });
-
-    canvas.addEventListener("mouseup", (event) => {
-      if (event.button === 2) this.aimHeld = false;
-    });
-
-    canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
     canvas.addEventListener(
       "wheel",
@@ -95,14 +115,22 @@ export class Input {
       if (!this.pointerLocked) {
         this.mouseDeltaX = 0;
         this.mouseDeltaY = 0;
-        this.aimHeld = false;
       }
+    });
+
+    document.addEventListener("pointerlockerror", () => {
+      this.pointerLocked = false;
     });
   }
 
   requestPointerLock(canvas) {
-    if (!this.enabled || document.pointerLockElement === canvas) return;
-    canvas.requestPointerLock?.();
+    const target = canvas || this._canvas;
+    if (!this.enabled || !target || document.pointerLockElement === target) return;
+    // Prefer unadjusted movement when available (less OS accel / better FPS feel)
+    const promise = target.requestPointerLock?.({ unadjustedMovement: true });
+    if (promise?.catch) {
+      promise.catch(() => target.requestPointerLock?.());
+    }
   }
 
   exitPointerLock() {
@@ -117,7 +145,6 @@ export class Input {
     this.mouseDeltaY = 0;
     this.wheelDelta = 0;
     this.attackClicked = false;
-    this.aimHeld = false;
   }
 
   disable() {
@@ -128,7 +155,6 @@ export class Input {
     this.mouseDeltaY = 0;
     this.wheelDelta = 0;
     this.attackClicked = false;
-    this.aimHeld = false;
     this.exitPointerLock();
   }
 
