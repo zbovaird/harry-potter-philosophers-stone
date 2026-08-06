@@ -8,6 +8,7 @@ import {
 } from "../forestProps.js";
 import { createNameLabel, worldOffsetColliders } from "../worldUtils.js";
 import { createEnemy } from "../combat.js";
+import { hasShield } from "../bossAI.js";
 
 export const FOREST_ORIGIN = new THREE.Vector3(0, 0, 600);
 
@@ -128,6 +129,10 @@ export function updateForestLevel(game, delta, time) {
       enemy.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
     } else if (dist <= 1.5 && enemy.attackCd <= 0 && game.combat?.alive) {
       enemy.attackCd = 1.2;
+      if (hasShield(game)) {
+        game.showMessage("Protego!", 0.7);
+        continue;
+      }
       const dealt = game.combat.damage(enemy.damage);
       if (dealt > 0) {
         game.audio.hurt();
@@ -136,6 +141,38 @@ export function updateForestLevel(game, delta, time) {
       }
     }
   }
+}
+
+/** Patronus frightens nearby forest creatures. */
+export function castPatronusInForest(game) {
+  const data = game.levelData.forest;
+  if (!data) return false;
+  let scared = 0;
+  const origin = FOREST_ORIGIN;
+  const playerLocal = game.player.root.position.clone().sub(origin);
+  for (const enemy of data.enemies) {
+    if (!enemy.alive) continue;
+    const dist = enemy.root.position.distanceTo(playerLocal);
+    if (dist < 14) {
+      enemy.stun = Math.max(enemy.stun, 4.5);
+      enemy.slow = Math.max(enemy.slow, 3);
+      // Knock them back
+      const away = enemy.root.position.clone().sub(playerLocal);
+      away.y = 0;
+      if (away.lengthSq() > 0.01) {
+        away.normalize();
+        enemy.root.position.addScaledVector(away, 4);
+      }
+      scared += 1;
+    }
+  }
+  if (scared > 0) {
+    game.showMessage("Expecto Patronum! The creatures flee the light!");
+    game.fx.addTrauma(0.25);
+    return true;
+  }
+  game.showMessage("Expecto Patronum!", 1);
+  return true;
 }
 
 export function forestSpawn() {

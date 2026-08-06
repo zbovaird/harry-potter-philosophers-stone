@@ -12,7 +12,11 @@ import {
   saveProgress,
   markLevelComplete,
   isLevelUnlocked,
+  saveCheckpoint,
 } from "./progress.js";
+import { getQuest } from "./quests.js";
+import { tryAccioKey } from "./levels/trapdoor.js";
+import { castPatronusInForest } from "./levels/forest.js";
 import { createPlayer, getCharacter } from "./characters.js";
 import { setupCharacterSelect } from "./characterSelect.js";
 import { SpellCaster, getSpell, SPELLS, HOTBAR_SIZE } from "./spells.js";
@@ -124,6 +128,9 @@ class Game {
       continueBtn: $("continue-btn"),
       houseSelect: $("house-select"),
       houseGrid: $("house-grid"),
+      pauseScreen: $("pause-screen"),
+      resumeBtn: $("resume-btn"),
+      pauseQuitBtn: $("pause-quit-btn"),
     };
 
     this.initRenderer();
@@ -238,6 +245,44 @@ class Game {
     this.ui.houseGrid?.querySelectorAll(".house-btn").forEach((btn) => {
       btn.addEventListener("click", () => this.confirmHouse(btn.dataset.house));
     });
+    this.ui.resumeBtn?.addEventListener("click", () => this.resumeGame());
+    this.ui.pauseQuitBtn?.addEventListener("click", () => {
+      this.resumeGame();
+      this.showLevelSelect();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Escape" && (this.state === "playing" || this.state === "paused")) {
+        e.preventDefault();
+        if (this.state === "playing") this.pauseGame();
+        else this.resumeGame();
+      }
+    });
+  }
+
+  pauseGame() {
+    if (this.state !== "playing") return;
+    this.state = "paused";
+    this.input.disable();
+    this.ui.pauseScreen?.classList.remove("hidden");
+  }
+
+  resumeGame() {
+    if (this.state !== "paused") return;
+    this.ui.pauseScreen?.classList.add("hidden");
+    this.state = "playing";
+    this.input.enable();
+    this.input.requestPointerLock(this.canvas);
+  }
+
+  saveCheckpoint() {
+    if (!this.currentLevel) return;
+    const data = this.levelData[this.currentLevel];
+    if (!data) return;
+    const flags = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") flags[k] = v;
+    }
+    this.progress = saveCheckpoint(this.currentLevel, flags);
   }
 
   openHouseSelect() {
@@ -252,13 +297,15 @@ class Game {
     if (!data) return;
     data.sorted = true;
     data.house = house;
+    data.houseVisited = false;
     this.progress = saveProgress({ house });
     this.ui.houseSelect.classList.add("hidden");
     this.state = "playing";
     this.input.enable();
     this.input.requestPointerLock(this.canvas);
-    this.showMessage(`Sorting Hat: "Better be… ${house}!" Explore the castle courtyard, then leave when ready.`);
+    this.showMessage(`Sorting Hat: "Better be… ${house}!" Sit at your house table, then explore.`);
     this.updateObjective();
+    this.saveCheckpoint();
     this.audio.ui();
   }
 
@@ -329,6 +376,7 @@ class Game {
     this.ui.controlsHelp.classList.add("hidden");
     this.ui.message.classList.add("hidden");
     this.ui.houseSelect?.classList.add("hidden");
+    this.ui.pauseScreen?.classList.add("hidden");
   }
 
   showGameplayUi() {
@@ -472,41 +520,8 @@ class Game {
 
   updateObjective() {
     const data = this.levelData[this.currentLevel];
-    const objectives = {
-      diagon: () => {
-        if (!data.ollivanderTalked) return "Talk to Ollivander.";
-        if (!data.wandClaimed) return "Claim your wand from the pedestal.";
-        if (data.dummiesHit < 5) return `Practice on the dummies (${data.dummiesHit}/5) — try different hotbar spells (1–0).`;
-        if (!data.leviosaDone) return "Levitate the feather — press E near it, or cast Wingardium Leviosa (key 5).";
-        return "Reach the gate at the far end of the alley.";
-      },
-      hogwarts: () => {
-        if (!data.mcgTalked) return "Speak with Professor McGonagall.";
-        if (!data.sorted) return "Sit for the Sorting Hat and choose your house.";
-        return `Explore ${data.house || "your house"} — wander the courtyard, then leave through the Great Hall doors.`;
-      },
-      troll: () => {
-        if (data.troll.alive) return "Defeat the mountain troll! Aim and cast Stupefy / Expelliarmus.";
-        if (!data.hermioneChecked) return "Check on Hermione.";
-        return "Leave through the bathroom exit door (south wall).";
-      },
-      forest: () => {
-        if (!data.firenzeTalked) return "Reach Firenze in the clearing and speak with him. (Cloak optional.)";
-        return "Leave through the forest gate beyond Firenze.";
-      },
-      trapdoor: () => {
-        if (!data.snareCleared) return "Shoot Incendio (7) at the Devil's Snare.";
-        if (!data.keyCaught) return "Select Accio (0) and summon a flying key.";
-        if (!data.chessCleared) return "Freeze the chess pieces with Petrificus Totalus (6).";
-        return "Continue through the exit door.";
-      },
-      quirrell: () => {
-        if (!data.mirrorSeen) return "Look into the Mirror of Erised.";
-        if (data.quirrell.alive) return "Defeat Quirrell! Use Protego, Expelliarmus, Stupefy.";
-        return "Claim the Stone from the Mirror.";
-      },
-    };
-    this.ui.objective.textContent = objectives[this.currentLevel]?.() || "Explore.";
+    const quest = getQuest(this.currentLevel);
+    this.ui.objective.textContent = quest?.objective?.(data) || "Explore.";
   }
 
   showMessage(text, duration = 2.4) {
@@ -528,13 +543,9 @@ class Game {
     let bestDist = Infinity;
     const pos = this.player.root.position;
     const data = this.levelData[this.currentLevel];
+    const quest = getQuest(this.currentLevel);
     for (const item of this.getInteractives()) {
-      // Skip one-shot talks once done so exit anchors can win
-      if (item.id === "firenze" && data?.firenzeTalked) continue;
-      if (item.id === "hermione" && data?.hermioneChecked && data?.troll && !data.troll.alive) continue;
-      if (item.id === "mirror" && data?.mirrorSeen && data?.quirrell && !data.quirrell.alive) continue;
-      if (item.id === "sortingHat" && data?.sorted) continue;
-      if (item.id === "snare" && data?.snareCleared) continue;
+      if (quest?.filterInteractive && !quest.filterInteractive(item, data)) continue;
       item.root.getWorldPosition(_interactWorld);
       const dist = pos.distanceTo(_interactWorld);
       if (dist < (item.range || 2.5) && dist < bestDist) {
@@ -556,33 +567,16 @@ class Game {
       }
       return null;
     }
-    // Gate some actions by quest state
     const data = this.levelData[this.currentLevel];
+    const quest = getQuest(this.currentLevel);
     let label = near.label;
     let enabled = true;
-    if (this.currentLevel === "diagon" && near.id === "exit") {
-      enabled = data.wandClaimed && data.dummiesHit >= 5 && data.leviosaDone;
-      if (!enabled) label = "Complete Ollivander's trials first";
-    }
-    if (this.currentLevel === "hogwarts" && near.id === "exit") {
-      enabled = data.sorted;
-      if (!enabled) label = "Complete the Sorting first";
-    }
-    if (this.currentLevel === "troll" && near.id === "exit") {
-      enabled = !data.troll.alive && data.hermioneChecked;
-      if (!enabled) label = data.troll.alive ? "Defeat the troll first" : "Check on Hermione first";
-    }
-    if (this.currentLevel === "forest" && near.id === "exit") {
-      enabled = data.firenzeTalked;
-      if (!enabled) label = "Speak with Firenze first";
-    }
-    if (this.currentLevel === "trapdoor" && near.id === "exit") {
-      enabled = data.snareCleared && data.keyCaught && data.chessCleared;
-      if (!enabled) label = "Finish the trials first";
-    }
-    if (this.currentLevel === "quirrell" && near.id === "exit") {
-      enabled = !data.quirrell.alive && data.mirrorSeen;
-      if (!enabled) label = data.mirrorSeen ? "Defeat Quirrell first" : "Look in the Mirror first";
+    if (near.id === "exit" && quest) {
+      enabled = quest.canExit(data);
+      if (!enabled) {
+        const blocked = quest.exitBlockedLabel;
+        label = typeof blocked === "function" ? blocked(data) : blocked || "Not yet";
+      }
     }
     if (label !== this._lastActionLabel || enabled !== this._lastActionEnabled) {
       this.ui.actionBtn.disabled = !enabled;
@@ -590,125 +584,23 @@ class Game {
       this._lastActionLabel = label;
       this._lastActionEnabled = enabled;
     }
-    return enabled ? near : null;
+    return near;
   }
 
   tryInteract() {
-    const near = this.updateContextAction();
+    const near = this.nearestInteractive();
     if (!near) return;
-    this.audio.interact();
+    // Re-check exit gating
     const data = this.levelData[this.currentLevel];
-
-    if (this.currentLevel === "diagon") {
-      if (near.id === "ollivander") {
-        data.ollivanderTalked = true;
-        this.showMessage("Ollivander: \"The wand chooses the wizard… claim yours, then practice.\"");
-      } else if (near.id === "wand") {
-        data.wandClaimed = true;
-        data.lumosDone = true;
-        const ped = data.pedestal?.userData;
-        if (ped?.wand) ped.wand.visible = false;
-        if (ped?.tip) ped.tip.visible = false;
-        if (ped?.glow) ped.glow.visible = false;
-        this.showMessage("The wand warms in your hand. Spells answer your call.");
-      } else if (near.id === "feather") {
-        // Level 1: E near the feather completes Leviosa — no spellbook cycling required
-        data.leviosaDone = true;
-        this.showMessage("Wingardium Leviosa! The feather rises.");
-      } else if (near.id === "exit" && data.wandClaimed && data.dummiesHit >= 5 && data.leviosaDone) {
-        this.completeLevel();
-        return;
-      }
+    const quest = getQuest(this.currentLevel);
+    if (near.id === "exit" && quest && !quest.canExit(data)) {
+      const blocked = quest.exitBlockedLabel;
+      this.showMessage(typeof blocked === "function" ? blocked(data) : blocked || "Not yet.");
+      return;
     }
-
-    if (this.currentLevel === "hogwarts") {
-      if (near.id === "mcgonagall") {
-        data.mcgTalked = true;
-        this.showMessage("McGonagall: \"Welcome to Hogwarts. The Sorting Hat awaits.\"");
-      } else if (near.id === "sortingHat") {
-        if (data.sorted) {
-          this.showMessage(`Sorting Hat: "Already sorted — ${data.house || "your house"}! Wander the courtyard north of the Hall."`);
-        } else {
-          this.openHouseSelect();
-          return;
-        }
-      } else if (near.id === "exit" && data.sorted) {
-        this.completeLevel();
-        return;
-      }
-    }
-
-    if (this.currentLevel === "troll") {
-      if (near.id === "hermione") {
-        data.hermioneChecked = true;
-        this.showMessage(data.troll.alive ? "Hermione: \"Help! The troll!\"" : "Hermione: \"You saved me!\"");
-      } else if (near.id === "exit" && !data.troll.alive && data.hermioneChecked) {
-        this.completeLevel();
-        return;
-      }
-    }
-
-    if (this.currentLevel === "forest") {
-      if (near.id === "cloak") {
-        data.cloakTaken = true;
-        data.cloak.visible = false;
-        this.cloaked = true;
-        this.player.root.traverse((o) => {
-          if (o.isMesh && o.material) {
-            o.material.transparent = true;
-            o.material.opacity = 0.35;
-          }
-        });
-        this.showMessage("You pull the Cloak over yourself. Creatures struggle to see you.");
-      } else if (near.id === "firenze") {
-        data.firenzeTalked = true;
-        this.showMessage("Firenze: \"Mars is bright tonight. Go carefully.\"");
-      } else if (near.id === "exit" && data.firenzeTalked) {
-        this.completeLevel();
-        return;
-      }
-    }
-
-    if (this.currentLevel === "trapdoor") {
-      if (near.id === "snare") {
-        this.showMessage("Cast Incendio (7) and shoot the vines — no need to press E.");
-        return;
-      } else if (near.id === "keys") {
-        const spell = this.caster.getSelectedSpell();
-        if (spell && (spell.id === "accio" || spell.effect === "pull")) {
-          data.keyCaught = true;
-          data.keys.forEach((k) => {
-            k.caught = true;
-            k.mesh.visible = false;
-          });
-          this.showMessage("Accio! The winged key flies to your hand.");
-        } else {
-          this.showMessage("Select Accio to summon a key.");
-          return;
-        }
-      } else if (near.id === "exit" && data.snareCleared && data.keyCaught && data.chessCleared) {
-        this.completeLevel();
-        return;
-      }
-    }
-
-    if (this.currentLevel === "quirrell") {
-      if (near.id === "mirror") {
-        if (!data.mirrorSeen) {
-          data.mirrorSeen = true;
-          this.showMessage("You see yourself presenting the Stone… Quirrell turns on you!");
-        } else if (!data.quirrell.alive) {
-          data.stoneClaimed = true;
-          this.completeLevel();
-          return;
-        }
-      } else if (near.id === "exit" && !data.quirrell.alive && data.mirrorSeen) {
-        data.stoneClaimed = true;
-        this.completeLevel();
-        return;
-      }
-    }
-
+    this.audio.interact();
+    const result = quest?.tryInteract?.(this, near, data);
+    if (result === "complete") return;
     this.updateObjective();
   }
 
@@ -736,7 +628,8 @@ class Game {
       return;
     }
     if (spell.restricted && this.currentLevel !== "quirrell") {
-      // Allow but expensive — already high cost
+      this.showMessage("That curse has no place here.", 1.4);
+      return;
     }
 
     if (!this.combat.spendMana(spell.mana)) return;
@@ -761,9 +654,14 @@ class Game {
       return;
     }
 
-    if (spell.type === "utility") {
+    if (spell.type === "utility" || spell.effect === "pull" || spell.effect === "unlock" || spell.effect === "levitate") {
       this.applyUtilitySpell(spell);
       return;
+    }
+
+    // Patronus: scare forest creatures + fire a bolt
+    if (spell.effect === "patronus" && this.currentLevel === "forest") {
+      castPatronusInForest(this);
     }
 
     if (spell.type === "aoe") {
@@ -894,7 +792,6 @@ class Game {
   }
 
   applyUtilitySpell(spell) {
-    // Trigger nearby interactives that match
     if (spell.effect === "levitate" && this.currentLevel === "diagon") {
       const data = this.levelData.diagon;
       const feather = data.interactives.find((i) => i.id === "feather");
@@ -909,17 +806,29 @@ class Game {
       }
     }
     if (spell.effect === "pull" && this.currentLevel === "trapdoor") {
-      const data = this.levelData.trapdoor;
-      if (!data.keyCaught) {
-        data.keyCaught = true;
-        data.keys.forEach((k) => {
-          k.caught = true;
-          k.mesh.visible = false;
-        });
-        this.showMessage("Accio!");
-        this.updateObjective();
-        return;
+      if (tryAccioKey(this)) return;
+    }
+    if (spell.effect === "unlock") {
+      if (this.currentLevel === "trapdoor") {
+        const data = this.levelData.trapdoor;
+        if (data.snareCleared && data.keyCaught && data.chessCleared && !data.doorUnlocked) {
+          const exit = data.interactives.find((i) => i.id === "exit");
+          if (exit) {
+            const world = exit.root.getWorldPosition(new THREE.Vector3());
+            if (this.player.root.position.distanceTo(world) < 5) {
+              data.doorUnlocked = true;
+              this.showMessage("Alohomora! The door unlocks.");
+              this.updateObjective();
+              this.saveCheckpoint();
+              return;
+            }
+          }
+          this.showMessage("Stand nearer the sealed door.");
+          return;
+        }
       }
+      this.showMessage("Alohomora — nothing locked nearby.", 1.2);
+      return;
     }
     this.showMessage(`${spell.name}!`, 1);
   }
@@ -969,15 +878,10 @@ class Game {
         this.showMessage("Quirrell falls — the Stone is yours to claim!");
         this.updateObjective();
       }
-      if (this.currentLevel === "trapdoor") {
-        const pieces = this.levelData.trapdoor.enemies;
-        if (pieces.every((e) => !e.alive)) {
-          this.levelData.trapdoor.chessCleared = true;
-          this.showMessage("The chess board falls silent.");
-        }
+      if (this.currentLevel === "forest") {
         this.updateObjective();
       }
-      if (this.currentLevel === "forest") {
+      if (this.currentLevel === "troll" || this.currentLevel === "quirrell") {
         this.updateObjective();
       }
     }
@@ -1244,9 +1148,11 @@ class Game {
       this.refreshHotbarUi();
     }
 
-    this.fx.update(delta, this.time);
-    if (this.player) this.updateCamera();
-    this.fx.render();
+    if (this.state === "playing" || this.state === "paused") {
+      this.fx.update(delta, this.time);
+      if (this.player) this.updateCamera();
+      this.fx.render();
+    }
     this.input.endFrame();
   }
 }

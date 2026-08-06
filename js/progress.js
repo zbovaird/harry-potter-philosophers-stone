@@ -57,6 +57,7 @@ export function loadProgress() {
     currentLevel: "diagon",
     lastCharacter: null,
     house: null,
+    checkpoints: {},
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -68,6 +69,7 @@ export function loadProgress() {
       currentLevel: valid.has(data.currentLevel) ? data.currentLevel : "diagon",
       lastCharacter: data.lastCharacter || null,
       house: data.house || null,
+      checkpoints: data.checkpoints && typeof data.checkpoints === "object" ? data.checkpoints : {},
     };
   } catch {
     return defaults;
@@ -89,4 +91,16 @@ export function markLevelComplete(levelId) {
 export function isLevelUnlocked(_levelId, _progress = loadProgress()) {
   // Free level select — all movie chapters available from the start
   return true;
+}
+
+export function saveCheckpoint(levelId, flags = {}) {
+  const progress = loadProgress();
+  const checkpoints = { ...(progress.checkpoints || {}) };
+  checkpoints[levelId] = { ...flags, at: Date.now() };
+  return saveProgress({ checkpoints });
+}
+
+export function loadCheckpoint(levelId) {
+  const progress = loadProgress();
+  return progress.checkpoints?.[levelId] || null;
 }

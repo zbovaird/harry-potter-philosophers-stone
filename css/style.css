@@ -38,6 +38,7 @@ body {
 #level-select,
 #character-select,
 #house-select,
+#pause-screen,
 #fade,
 #combat-hud,
 #spell-hotbar,
@@ -362,6 +363,7 @@ header h1 {
   transition: width 0.15s ease;
 }
 
+#pause-screen,
 #character-select,
 #level-select,
 #win-screen,
@@ -383,7 +385,8 @@ header h1 {
 #character-select h2,
 #level-select h2,
 #win-screen h2,
-#house-select h2 {
+#house-select h2,
+#pause-screen h2 {
   font-family: Cinzel, serif;
   font-size: 2rem;
   color: #d4af37;
@@ -440,15 +443,16 @@ header h1 {
 
 .character-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 160px));
+  grid-template-columns: repeat(5, minmax(110px, 150px));
   gap: 12px;
-  max-width: 920px;
+  max-width: 860px;
   margin: 8px 0 12px;
 }
 
 @media (max-width: 900px) {
   .character-grid {
-    grid-template-columns: repeat(3, minmax(100px, 1fr));
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
+    max-width: 420px;
   }
 }
 

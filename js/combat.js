@@ -89,6 +89,14 @@ export function applySpellEffect(enemy, spell, damageMul = 1) {
     case "disarm":
       enemy.stun = Math.max(enemy.stun, 1.0);
       break;
+    case "patronus":
+      enemy.stun = Math.max(enemy.stun, 3.5);
+      enemy.slow = Math.max(enemy.slow, 2.5);
+      break;
+    case "control":
+      enemy.stun = Math.max(enemy.stun, 2.5);
+      enemy.slow = Math.max(enemy.slow, 4);
+      break;
     case "kill":
       enemy.hp = 0;
       break;

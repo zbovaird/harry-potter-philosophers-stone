@@ -7,6 +7,7 @@ import {
 } from "../quirrellProps.js";
 import { createEnemy } from "../combat.js";
 import { worldOffsetColliders } from "../worldUtils.js";
+import { tickBoss, hasShield } from "../bossAI.js";
 
 export const QUIRRELL_ORIGIN = new THREE.Vector3(0, 0, 1000);
 
@@ -28,13 +29,17 @@ export function buildQuirrellLevel(game) {
   group.add(quirrellMesh);
   const quirrell = createEnemy({
     root: quirrellMesh,
-    hp: 240,
-    damage: 14,
+    hp: 280,
+    damage: 18,
     hitRadius: 2.4,
     hitHeight: 1.3,
     name: "Quirrell",
-    speed: 2.0,
+    speed: 2.1,
   });
+  quirrell.phase = 1;
+  quirrell.winding = false;
+  quirrell.windup = 0;
+  quirrell.boltCd = 0;
 
   const exitAnchor = new THREE.Object3D();
   exitAnchor.position.set(0, 0, -17);
@@ -70,6 +75,11 @@ export function resetQuirrellQuest(game) {
   q.alive = true;
   q.stun = 0;
   q.slow = 0;
+  q.phase = 1;
+  q.winding = false;
+  q.windup = 0;
+  q.boltCd = 0;
+  q.attackCd = 0;
   q.root.visible = true;
   q.root.position.set(0, 0, 4);
   q.root.rotation.set(0, 0, 0);
@@ -88,42 +98,52 @@ export function updateQuirrellLevel(game, delta, time) {
   const q = data.quirrell;
   if (!q.alive) {
     q.root.rotation.x = Math.min(Math.PI / 2, q.root.rotation.x + delta);
+    q.root.scale.setScalar(1);
     return;
   }
 
-  q.stun = Math.max(0, q.stun - delta);
-  q.slow = Math.max(0, q.slow - delta);
-  q.attackCd = Math.max(0, q.attackCd - delta);
+  q.boltCd = Math.max(0, (q.boltCd || 0) - delta);
 
-  if (!data.mirrorSeen) {
-    q.root.rotation.y = time * 0.3;
-    return;
-  }
+  tickBoss(game, q, QUIRRELL_ORIGIN, delta, time, {
+    meleeRange: 2.0,
+    baseDamage: 15,
+    windupTime: 0.6,
+    attackCooldown: 1.2,
+    phase2Hp: 0.45,
+    phase2SpeedMul: 1.45,
+    phase2DamageMul: 1.35,
+    canAct: data.mirrorSeen,
+    name: "Quirrell",
+  });
 
-  if (q.stun > 0) return;
-
-  const origin = QUIRRELL_ORIGIN;
-  const playerLocal = game.player.root.position.clone().sub(origin);
-  const toPlayer = playerLocal.clone().sub(q.root.position);
-  toPlayer.y = 0;
-  const dist = toPlayer.length();
-
-  if (dist > 2) {
-    toPlayer.normalize();
-    q.root.position.addScaledVector(toPlayer, q.speed * (q.slow > 0 ? 0.45 : 1) * delta);
-    q.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-  } else if (q.attackCd <= 0 && game.combat?.alive) {
-    if (game.caster?.shieldUntil > game.time) {
-      q.attackCd = 0.8;
-      game.showMessage("Protego deflects the curse!");
-      return;
+  // Phase 2: ranged curse bolts the player must shield or dodge
+  if (data.mirrorSeen && q.alive && q.phase >= 2 && q.boltCd <= 0 && !q.winding && q.stun <= 0) {
+    const playerLocal = game.player.root.position.clone().sub(QUIRRELL_ORIGIN);
+    const dist = playerLocal.distanceTo(q.root.position);
+    if (dist > 3 && dist < 18) {
+      q.boltCd = 2.4;
+      game.showMessage("Quirrell casts — Protego!", 0.8);
+      // Delayed hit resolves next frames via pendingBolt
+      q.pendingBolt = 0.45;
     }
-    q.attackCd = 1.0;
-    const dealt = game.combat.damage(q.damage);
-    if (dealt > 0) {
-      game.audio.hurt();
-      game.fx.addTrauma(0.5);
-      game.fx.flashDamage(1);
+  }
+
+  if (q.pendingBolt != null) {
+    q.pendingBolt -= delta;
+    if (q.pendingBolt <= 0) {
+      q.pendingBolt = null;
+      if (!q.alive || !game.combat?.alive) return;
+      if (hasShield(game)) {
+        game.showMessage("Protego deflects the curse!");
+        game.fx.addTrauma(0.2);
+      } else {
+        const dealt = game.combat.damage(12);
+        if (dealt > 0) {
+          game.audio.hurt();
+          game.fx.addTrauma(0.4);
+          game.fx.flashDamage(0.8);
+        }
+      }
     }
   }
 }

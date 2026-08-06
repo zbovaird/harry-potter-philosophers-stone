@@ -78,53 +78,34 @@ export function createDetailedHermione() {
   const head = m(new THREE.SphereGeometry(0.15, 14, 12), skin);
   head.position.y = 1.55;
 
-  // Feminine silhouette: wide curly crown + long back fall
-  const crown = m(new THREE.SphereGeometry(0.19, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.7), hair, false, true);
+  // Smooth full hair — locks only, no bubble spheres
+  const crown = m(new THREE.SphereGeometry(0.175, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.75), hair, false, true);
   crown.position.set(0, 1.6, -0.01);
-  crown.scale.set(1.3, 1.15, 1.25);
+  crown.scale.set(1.3, 1.15, 1.32);
   root.add(crown);
-  const back = m(new THREE.CapsuleGeometry(0.12, 0.4, 6, 12), hair, false, true);
-  back.position.set(0, 1.2, -0.12);
-  back.scale.set(1.4, 1, 0.85);
+  const back = m(new THREE.CapsuleGeometry(0.11, 0.38, 6, 12), hair, false, true);
+  back.position.set(0, 1.22, -0.13);
+  back.scale.set(1.5, 1, 0.75);
   back.rotation.x = 0.2;
   root.add(back);
-
-  for (let i = 0; i < 44; i += 1) {
-    const a = (i / 44) * Math.PI * 2;
-    const layer = i % 4;
-    const r = 0.15 + layer * 0.035;
-    const curl = m(
-      new THREE.SphereGeometry(0.038 + (i % 4) * 0.01, 8, 6),
+  for (let i = 0; i < 20; i += 1) {
+    const a = -1.4 + (i / 19) * 2.8;
+    const lock = m(
+      new THREE.CapsuleGeometry(0.024, 0.26 + (i % 4) * 0.04, 5, 10),
       i % 2 ? hair : hairDark,
       false,
       true
     );
-    curl.position.set(
-      Math.sin(a) * r,
-      1.48 - layer * 0.04 + (i % 3) * 0.01,
-      Math.cos(a) * r * 0.9 - 0.02
-    );
-    root.add(curl);
+    lock.position.set(Math.sin(a) * 0.16, 1.28 - (i % 4) * 0.04, Math.cos(a) * 0.11 - 0.03);
+    lock.rotation.z = Math.sin(a) * 0.38;
+    lock.rotation.x = 0.3;
+    root.add(lock);
   }
-  // Long ringlets past the shoulders
-  for (let i = 0; i < 16; i += 1) {
-    const a = -1.3 + (i / 15) * 2.6;
-    const ringlet = m(
-      new THREE.CapsuleGeometry(0.028, 0.2 + (i % 4) * 0.05, 4, 8),
-      i % 2 ? hair : hairDark,
-      false,
-      true
-    );
-    ringlet.position.set(Math.sin(a) * 0.17, 1.15 - (i % 4) * 0.04, Math.cos(a) * 0.11 - 0.02);
-    ringlet.rotation.z = a * 0.28;
-    ringlet.rotation.x = 0.35;
-    root.add(ringlet);
-  }
-  // Soft bangs
-  for (let i = 0; i < 6; i += 1) {
-    const bang = m(new THREE.CapsuleGeometry(0.016, 0.1, 4, 8), hair, false, true);
-    bang.position.set(-0.08 + i * 0.032, 1.62, 0.15);
+  for (let i = 0; i < 7; i += 1) {
+    const bang = m(new THREE.CapsuleGeometry(0.013, 0.1, 4, 8), hair, false, true);
+    bang.position.set(-0.09 + i * 0.03, 1.62, 0.145);
     bang.rotation.x = 0.7;
+    bang.rotation.z = (i - 3) * 0.07;
     root.add(bang);
   }
 

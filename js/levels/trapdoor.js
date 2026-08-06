@@ -4,23 +4,21 @@ import {
   updateTrapdoorWorld,
   createDevilsSnare,
   createFlyingKey,
-  createChessPiece,
 } from "../trapdoorProps.js";
 import { mat, mesh, worldOffsetColliders } from "../worldUtils.js";
-import { createEnemy } from "../combat.js";
 
 export const TRAPDOOR_ORIGIN = new THREE.Vector3(0, 0, 800);
+
+const CHESS_ORDER = ["Queen", "Knight", "Rook", "Bishop"];
 
 export function buildTrapdoorLevel(game) {
   const group = new THREE.Group();
   group.name = "trapdoor";
   const colliders = [];
   const interactives = [];
-  const enemies = [];
 
   const anim = buildTrapdoorWorld(game, group, colliders);
 
-  // Devil's Snare room
   const snare = createDevilsSnare();
   snare.position.set(0, 0, -20);
   group.add(snare);
@@ -31,34 +29,83 @@ export function buildTrapdoorLevel(game) {
     range: 5.5,
   });
 
-  // Flying keys
+  // Flying keys — one correct (brighter), rest decoys
   const keys = [];
-  for (let i = 0; i < 10; i += 1) {
+  const correctIndex = 3;
+  for (let i = 0; i < 8; i += 1) {
     const key = createFlyingKey();
     key.position.set((Math.random() - 0.5) * 12, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4);
+    const correct = i === correctIndex;
+    if (correct) {
+      key.traverse((o) => {
+        if (o.isMesh && o.material?.emissive) {
+          o.material = o.material.clone();
+          o.material.emissive = new THREE.Color(0xffcc44);
+          o.material.emissiveIntensity = 1.4;
+          o.material.color = new THREE.Color(0xffe08a);
+        }
+      });
+      const halo = mesh(
+        new THREE.RingGeometry(0.35, 0.48, 20),
+        new THREE.MeshStandardMaterial({
+          color: 0xffee88,
+          emissive: 0xffaa22,
+          emissiveIntensity: 1.5,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85,
+        }),
+        false,
+        false
+      );
+      halo.rotation.x = Math.PI / 2;
+      key.add(halo);
+      key.userData.halo = halo;
+    } else {
+      key.scale.setScalar(0.85);
+    }
     group.add(key);
-    keys.push({ mesh: key, phase: Math.random() * Math.PI * 2, caught: false });
+    keys.push({ mesh: key, phase: Math.random() * Math.PI * 2, caught: false, correct });
   }
-  interactives.push({ id: "keys", root: keys[0].mesh, label: "Accio the correct key", range: 9 });
+  const keyAnchor = new THREE.Object3D();
+  keyAnchor.position.set(0, 2, 0);
+  group.add(keyAnchor);
+  interactives.push({ id: "keys", root: keyAnchor, label: "Accio the glowing correct key", range: 10 });
 
-  // Chess pieces
-  const types = ["rook", "knight", "queen", "knight", "pawn"];
-  for (let i = 0; i < 5; i += 1) {
-    const piece = createChessPiece(i % 2 === 0, types[i]);
-    piece.position.set(-6 + i * 3, 0, 18);
-    group.add(piece);
-    enemies.push(
-      createEnemy({
-        root: piece,
-        hp: 35,
-        damage: 10,
-        hitRadius: 2.2,
-        hitHeight: 1.2,
-        name: "Chess Piece",
-        speed: 1.6,
-      })
+  // Wizard's chess — step on glowing tiles in order (not DPS)
+  const chessTiles = [];
+  const tileSpots = [
+    [-3, 16],
+    [2, 18],
+    [-1, 21],
+    [3, 24],
+  ];
+  tileSpots.forEach(([x, z], i) => {
+    const tileMat = new THREE.MeshStandardMaterial({
+      color: i % 2 ? 0xd0c8b8 : 0x2a2a30,
+      emissive: 0x88aaff,
+      emissiveIntensity: i === 0 ? 1.2 : 0.05,
+      roughness: 0.55,
+    });
+    const tile = mesh(new THREE.BoxGeometry(2.4, 0.12, 2.4), tileMat, false, true);
+    tile.position.set(x, 0.08, z);
+    tile.userData.lit = i === 0;
+    group.add(tile);
+    chessTiles.push(tile);
+    const marker = mesh(
+      new THREE.CylinderGeometry(0.25, 0.3, 0.5 + i * 0.15, 8),
+      new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.4, metalness: 0.2 })
     );
-  }
+    marker.position.set(x, 0.4, z);
+    group.add(marker);
+    interactives.push({
+      id: "chessTile",
+      root: tile,
+      index: i,
+      label: `Step: ${CHESS_ORDER[i]}`,
+      range: 2.2,
+    });
+  });
 
   const exitDoor = mesh(
     new THREE.BoxGeometry(2.4, 3.4, 0.4),
@@ -75,12 +122,15 @@ export function buildTrapdoorLevel(game) {
   game.levelColliders.trapdoor = colliders;
   game.levelData.trapdoor = {
     interactives,
-    enemies,
+    enemies: [],
     snare,
     keys,
+    chessTiles,
+    chessStep: 0,
     snareCleared: false,
     keyCaught: false,
     chessCleared: false,
+    doorUnlocked: false,
     anim,
   };
 
@@ -93,17 +143,64 @@ export function resetTrapdoorQuest(game) {
   data.snareCleared = false;
   data.keyCaught = false;
   data.chessCleared = false;
+  data.doorUnlocked = false;
+  data.chessStep = 0;
   data.snare.visible = true;
   for (const k of data.keys) {
     k.caught = false;
     k.mesh.visible = true;
   }
-  for (const e of data.enemies) {
-    e.hp = e.maxHp;
-    e.alive = true;
-    e.root.visible = true;
-    e.root.scale.setScalar(1);
+  data.chessTiles.forEach((tile, i) => {
+    if (tile.material) tile.material.emissiveIntensity = i === 0 ? 1.2 : 0.05;
+  });
+}
+
+export function tryAccioKey(game) {
+  const data = game.levelData.trapdoor;
+  if (!data || data.keyCaught || !game.player) return false;
+
+  const aim = new THREE.Vector3(
+    Math.sin(game.cameraYaw) * Math.cos(game.cameraPitch),
+    Math.sin(game.cameraPitch),
+    Math.cos(game.cameraYaw) * Math.cos(game.cameraPitch)
+  ).normalize();
+  const origin = game.player.root.position.clone();
+  origin.y += 1.3;
+
+  let best = null;
+  let bestScore = 0.35;
+  for (const key of data.keys) {
+    if (key.caught) continue;
+    const world = key.mesh.getWorldPosition(new THREE.Vector3());
+    const to = world.clone().sub(origin);
+    const dist = to.length();
+    if (dist > 14) continue;
+    to.normalize();
+    const score = to.dot(aim);
+    if (score > bestScore) {
+      bestScore = score;
+      best = key;
+    }
   }
+
+  if (!best) {
+    game.showMessage("Aim at a flying key, then cast Accio.");
+    return true;
+  }
+  if (!best.correct) {
+    game.showMessage("Wrong key — Accio the glowing one!");
+    return true;
+  }
+
+  data.keyCaught = true;
+  for (const k of data.keys) {
+    k.caught = true;
+    k.mesh.visible = false;
+  }
+  game.showMessage("Accio! The correct winged key flies to your hand.");
+  game.updateObjective();
+  game.saveCheckpoint?.();
+  return true;
 }
 
 export function updateTrapdoorLevel(game, delta, time) {
@@ -119,40 +216,45 @@ export function updateTrapdoorLevel(game, delta, time) {
 
   for (const key of data.keys) {
     if (key.caught) continue;
+    const speed = key.correct ? 2.2 : 1.4;
     key.mesh.position.y = 1.5 + Math.sin(time * 2 + key.phase) * 0.9;
-    key.mesh.position.x += Math.sin(time + key.phase) * delta * 1.6;
+    key.mesh.position.x += Math.sin(time * (key.correct ? 1.4 : 1) + key.phase) * delta * speed;
+    key.mesh.position.z += Math.cos(time * 0.8 + key.phase) * delta * (key.correct ? 1.2 : 0.6);
+    // Keep keys in the key chamber roughly
+    key.mesh.position.x = THREE.MathUtils.clamp(key.mesh.position.x, -7, 7);
+    key.mesh.position.z = THREE.MathUtils.clamp(key.mesh.position.z, -5, 5);
     key.mesh.rotation.y += delta * 3;
     const wings = key.mesh.userData.wings;
     if (wings) {
       wings[0].rotation.z = 0.3 + Math.sin(time * 20 + key.phase) * 0.5;
       wings[1].rotation.z = -0.3 - Math.sin(time * 20 + key.phase) * 0.5;
     }
+    if (key.mesh.userData.halo) {
+      key.mesh.userData.halo.rotation.z = time * 2;
+    }
   }
 
-  data.chessCleared = data.enemies.every((e) => !e.alive);
-
-  const origin = TRAPDOOR_ORIGIN;
-  const playerLocal = game.player.root.position.clone().sub(origin);
-  for (const enemy of data.enemies) {
-    if (!enemy.alive) continue;
-    enemy.stun = Math.max(0, enemy.stun - delta);
-    enemy.slow = Math.max(0, enemy.slow - delta);
-    enemy.attackCd = Math.max(0, enemy.attackCd - delta);
-    if (enemy.stun > 0) continue;
-    const toPlayer = playerLocal.clone().sub(enemy.root.position);
-    toPlayer.y = 0;
-    const dist = toPlayer.length();
-    if (dist > 1.4 && dist < 14) {
-      toPlayer.normalize();
-      enemy.root.position.addScaledVector(toPlayer, enemy.speed * (enemy.slow > 0 ? 0.4 : 1) * delta);
-      enemy.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-    } else if (dist <= 1.4 && enemy.attackCd <= 0 && game.combat?.alive) {
-      enemy.attackCd = 1.1;
-      const dealt = game.combat.damage(enemy.damage);
-      if (dealt > 0) {
-        game.audio.hurt();
-        game.fx.addTrauma(0.3);
-        game.fx.flashDamage(0.6);
+  // Auto-progress chess when standing on the active glowing tile
+  if (!data.chessCleared && data.keyCaught && data.snareCleared) {
+    const step = data.chessStep || 0;
+    const tile = data.chessTiles[step];
+    if (tile) {
+      const world = tile.getWorldPosition(new THREE.Vector3());
+      const dist = game.player.root.position.distanceTo(world);
+      if (dist < 1.6) {
+        data.chessStep = step + 1;
+        if (tile.material) tile.material.emissiveIntensity = 0.05;
+        if (data.chessStep >= data.chessTiles.length) {
+          data.chessCleared = true;
+          game.showMessage("The chess board accepts your path!");
+          game.updateObjective();
+          game.saveCheckpoint?.();
+        } else {
+          const next = data.chessTiles[data.chessStep];
+          if (next?.material) next.material.emissiveIntensity = 1.2;
+          game.showMessage(`Tile ${data.chessStep}/4 — follow the next glow.`);
+          game.updateObjective();
+        }
       }
     }
   }

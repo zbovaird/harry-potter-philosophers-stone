@@ -39,6 +39,26 @@ export function buildHogwartsLevel(game) {
   group.add(mcg);
   interactives.push({ id: "mcgonagall", root: mcg, label: "Talk to Professor McGonagall", range: 2.8 });
 
+  // House tables — sit at yours after Sorting
+  const houses = [
+    { house: "Gryffindor", z: -10, color: 0x6a1a1a },
+    { house: "Hufflepuff", z: -3, color: 0x8a7a12 },
+    { house: "Ravenclaw", z: 4, color: 0x1a2a6a },
+    { house: "Slytherin", z: 11, color: 0x1a4a1a },
+  ];
+  for (const h of houses) {
+    const seat = new THREE.Object3D();
+    seat.position.set(0, 0, h.z);
+    group.add(seat);
+    interactives.push({
+      id: "houseTable",
+      root: seat,
+      house: h.house,
+      label: `Sit at the ${h.house} table`,
+      range: 3.2,
+    });
+  }
+
   // Exit doors
   const door = mesh(
     new THREE.BoxGeometry(2.8, 3.6, 0.35),
@@ -65,6 +85,7 @@ export function buildHogwartsLevel(game) {
     hat,
     sorted: false,
     house: null,
+    houseVisited: false,
     mcgTalked: false,
   };
 
@@ -75,7 +96,8 @@ export function resetHogwartsQuest(game) {
   const data = game.levelData.hogwarts;
   if (!data) return;
   data.sorted = false;
-  data.house = null;
+  data.house = game.progress?.house || null;
+  data.houseVisited = false;
   data.mcgTalked = false;
 }
 
