@@ -271,48 +271,94 @@ function addHair(head, character) {
     fall.rotation.x = 0.2;
     head.add(fall);
   } else if (character.id === "bellatrix") {
-    // Wild, frizzy, uneven curls — chaotic silhouette
-    addSmoothCrown(head, hairMat, { scaleX: 1.28, scaleY: 1.22, scaleZ: 1.3, y: 0.08 });
-    const frizz = mesh(new THREE.SphereGeometry(0.18, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.72), darkMat);
-    frizz.position.set(0, 0.04, -0.02);
-    frizz.scale.set(1.35, 1.25, 1.3);
-    head.add(frizz);
-    for (let i = 0; i < 28; i += 1) {
-      const a = -1.55 + (i / 27) * 3.1;
+    // Long wild feminine curls — face-framing, cascading (no upright spikes)
+    addSmoothCrown(head, hairMat, { scaleX: 1.2, scaleY: 1.1, scaleZ: 1.22, y: 0.05 });
+    addBangs(head, hairMat, "curtain");
+    // Soft face-frame layers
+    for (let i = 0; i < 10; i += 1) {
+      const side = i < 5 ? -1 : 1;
+      const k = i % 5;
+      addHairLock(
+        head,
+        k % 2 ? hairMat : darkMat,
+        side * (0.12 + k * 0.02),
+        -0.02 - k * 0.03,
+        0.1 - k * 0.02,
+        0.28 + k * 0.04,
+        0.018,
+        side * (0.45 + k * 0.08),
+        0.55
+      );
+    }
+    // Cascading side/back curls past the shoulders
+    for (let i = 0; i < 24; i += 1) {
+      const a = -1.5 + (i / 23) * 3.0;
       const matUse = i % 2 ? hairMat : darkMat;
-      const wild = (i % 5) * 0.08;
       addHairLock(
         head,
         matUse,
-        Math.sin(a) * (0.16 + wild * 0.08),
-        -0.02 - (i % 6) * 0.04 + (i % 3) * 0.02,
-        Math.cos(a) * (0.12 + wild * 0.05) - 0.03,
-        0.22 + (i % 5) * 0.07,
-        0.02 + (i % 4) * 0.008,
-        Math.sin(a) * (0.55 + wild),
-        0.15 + (i % 4) * 0.12
+        Math.sin(a) * 0.16,
+        -0.12 - (i % 5) * 0.035,
+        Math.cos(a) * 0.11 - 0.05,
+        0.42 + (i % 4) * 0.06,
+        0.02 + (i % 3) * 0.004,
+        Math.sin(a) * 0.42,
+        0.32 + Math.abs(Math.sin(a)) * 0.1
       );
     }
-    // Spiky top tufts
-    for (let i = 0; i < 10; i += 1) {
-      const a = (i / 10) * Math.PI * 2;
+    const fall = mesh(new THREE.CapsuleGeometry(0.1, 0.5, 6, 12), hairMat);
+    fall.position.set(0, -0.28, -0.15);
+    fall.scale.set(1.5, 1, 0.72);
+    fall.rotation.x = 0.2;
+    head.add(fall);
+  } else if (character.id === "sirius") {
+    // Long masculine black hair — hangs heavy, open forehead, no soft curtain bangs
+    addSmoothCrown(head, hairMat, { scaleX: 1.06, scaleY: 1.0, scaleZ: 1.1, y: 0.04 });
+    // Swept-back top
+    for (let i = 0; i < 8; i += 1) {
+      const a = -0.9 + i * 0.25;
+      addHairLock(head, hairMat, Math.sin(a) * 0.1, 0.1, Math.cos(a) * 0.08 - 0.02, 0.12, 0.018, a * 0.1, -0.55);
+    }
+    // Straight hanging side/back lengths
+    for (let i = 0; i < 16; i += 1) {
+      const a = -1.4 + (i / 15) * 2.8;
+      const matUse = i % 2 ? hairMat : darkMat;
       addHairLock(
         head,
-        i % 2 ? hairMat : darkMat,
-        Math.sin(a) * 0.08,
-        0.12 + (i % 3) * 0.03,
-        Math.cos(a) * 0.08 - 0.02,
-        0.12 + (i % 3) * 0.04,
-        0.018,
-        Math.sin(a) * 0.3,
-        -0.85 - (i % 4) * 0.08
+        matUse,
+        Math.sin(a) * 0.135,
+        -0.08 - (i % 3) * 0.04,
+        Math.cos(a) * 0.09 - 0.08,
+        0.4 + (i % 3) * 0.05,
+        0.02,
+        Math.sin(a) * 0.12,
+        0.55
       );
     }
-    addBangs(head, hairMat, "soft");
-  } else if (character.id === "sirius") {
-    // Long, wavy black hair
-    addSmoothCrown(head, hairMat, { scaleX: 1.12, scaleY: 1.08, scaleZ: 1.16, y: 0.06 });
+    const fall = mesh(new THREE.CapsuleGeometry(0.09, 0.48, 6, 12), darkMat);
+    fall.position.set(0, -0.26, -0.16);
+    fall.scale.set(1.25, 1, 0.65);
+    fall.rotation.x = 0.25;
+    head.add(fall);
+  } else if (character.id === "lavender") {
+    // Soft feminine blonde waves — shoulder-length, curtain bangs, face frame
+    addSmoothCrown(head, hairMat, { scaleX: 1.14, scaleY: 1.08, scaleZ: 1.16, y: 0.05 });
     addBangs(head, hairMat, "curtain");
+    for (let i = 0; i < 12; i += 1) {
+      const side = i < 6 ? -1 : 1;
+      const k = i % 6;
+      addHairLock(
+        head,
+        k % 2 ? hairMat : darkMat,
+        side * (0.11 + k * 0.018),
+        0.0 - k * 0.025,
+        0.11 - k * 0.015,
+        0.26 + k * 0.035,
+        0.016,
+        side * (0.4 + k * 0.06),
+        0.5
+      );
+    }
     for (let i = 0; i < 20; i += 1) {
       const a = -1.45 + (i / 19) * 2.9;
       const matUse = i % 2 ? hairMat : darkMat;
@@ -320,84 +366,65 @@ function addHair(head, character) {
         head,
         matUse,
         Math.sin(a) * 0.15,
-        -0.12 - (i % 4) * 0.03,
-        Math.cos(a) * 0.1 - 0.06,
-        0.45 + (i % 4) * 0.05,
-        0.018,
-        Math.sin(a) * 0.35,
-        0.28
-      );
-    }
-    const fall = mesh(new THREE.CapsuleGeometry(0.1, 0.52, 6, 12), hairMat);
-    fall.position.set(0, -0.3, -0.14);
-    fall.scale.set(1.4, 1, 0.7);
-    fall.rotation.x = 0.18;
-    head.add(fall);
-  } else if (character.id === "lavender") {
-    // Soft blonde curls
-    addSmoothCrown(head, hairMat, { scaleX: 1.22, scaleY: 1.12, scaleZ: 1.24, y: 0.06 });
-    const volume = mesh(new THREE.SphereGeometry(0.165, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.68), darkMat);
-    volume.position.set(0, 0.02, -0.03);
-    volume.scale.set(1.3, 1.15, 1.25);
-    head.add(volume);
-    for (let i = 0; i < 18; i += 1) {
-      const a = -1.4 + (i / 17) * 2.8;
-      const matUse = i % 2 ? hairMat : darkMat;
-      addHairLock(
-        head,
-        matUse,
-        Math.sin(a) * 0.17,
-        -0.04 - (i % 4) * 0.025,
-        Math.cos(a) * 0.12 - 0.03,
-        0.24 + (i % 3) * 0.04,
-        0.024,
+        -0.1 - (i % 4) * 0.03,
+        Math.cos(a) * 0.1 - 0.05,
+        0.36 + (i % 4) * 0.04,
+        0.017,
         Math.sin(a) * 0.38,
         0.28
       );
     }
-    addBangs(head, hairMat, "soft");
+    const fall = mesh(new THREE.CapsuleGeometry(0.095, 0.42, 6, 12), hairMat);
+    fall.position.set(0, -0.22, -0.14);
+    fall.scale.set(1.4, 1, 0.7);
+    fall.rotation.x = 0.18;
+    head.add(fall);
   } else if (character.id === "lupin") {
-    // Medium sandy, slightly greying / unkempt
-    addSmoothCrown(head, hairMat, { scaleX: 1.08, scaleY: 1.02, scaleZ: 1.1, y: 0.05 });
-    for (let i = 0; i < 14; i += 1) {
-      const a = -1.2 + (i / 13) * 2.4;
+    // Short masculine cut — sandy, slightly greying, open forehead (no soft bangs)
+    addSmoothCrown(head, hairMat, { scaleX: 1.04, scaleY: 0.98, scaleZ: 1.06, y: 0.04 });
+    for (let i = 0; i < 10; i += 1) {
+      const a = -1.0 + i * 0.22;
       const matUse = i % 3 === 0 ? darkMat : hairMat;
-      addHairLock(
-        head,
-        matUse,
-        Math.sin(a) * 0.13,
-        0.02 - (i % 3) * 0.02,
-        Math.cos(a) * 0.1 - 0.02,
-        0.16 + (i % 3) * 0.03,
-        0.018,
-        Math.sin(a) * 0.22,
-        0.05
-      );
+      addHairLock(head, matUse, Math.sin(a) * 0.11, 0.09, Math.cos(a) * 0.1, 0.09, 0.017, a * 0.12, -0.4);
     }
-    addBangs(head, hairMat, "soft");
+    // Short sideburns / temple
+    for (const side of [-1, 1]) {
+      addHairLock(head, darkMat, side * 0.13, -0.02, 0.04, 0.1, 0.016, side * 0.15, 0.35);
+      addHairLock(head, hairMat, side * 0.12, 0.04, 0.08, 0.08, 0.015, side * 0.2, 0.1);
+    }
+    // Short nape
+    for (let i = 0; i < 5; i += 1) {
+      const a = -0.5 + i * 0.25;
+      addHairLock(head, hairMat, Math.sin(a) * 0.1, 0.02, -0.12, 0.08, 0.016, 0, 0.7);
+    }
   } else if (character.id === "dumbledore") {
-    // Long silver-white hair
-    addSmoothCrown(head, hairMat, { scaleX: 1.14, scaleY: 1.1, scaleZ: 1.18, y: 0.06 });
-    addBangs(head, hairMat, "curtain");
-    for (let i = 0; i < 22; i += 1) {
-      const a = -1.5 + (i / 21) * 3.0;
+    // Long masculine elder hair — swept back, open forehead, heavy back fall
+    addSmoothCrown(head, hairMat, { scaleX: 1.08, scaleY: 1.02, scaleZ: 1.12, y: 0.04 });
+    // Swept-back crown (no curtain bangs)
+    for (let i = 0; i < 9; i += 1) {
+      const a = -1.0 + i * 0.25;
+      addHairLock(head, hairMat, Math.sin(a) * 0.1, 0.11, Math.cos(a) * 0.07 - 0.04, 0.14, 0.017, a * 0.08, -0.7);
+    }
+    // Long straight side hang
+    for (let i = 0; i < 18; i += 1) {
+      const a = -1.45 + (i / 17) * 2.9;
       const matUse = i % 2 ? hairMat : darkMat;
       addHairLock(
         head,
         matUse,
-        Math.sin(a) * 0.15,
-        -0.14 - (i % 5) * 0.03,
-        Math.cos(a) * 0.1 - 0.06,
-        0.5 + (i % 4) * 0.05,
-        0.017,
-        Math.sin(a) * 0.32,
-        0.25
+        Math.sin(a) * 0.14,
+        -0.1 - (i % 4) * 0.04,
+        Math.cos(a) * 0.08 - 0.1,
+        0.48 + (i % 3) * 0.05,
+        0.018,
+        Math.sin(a) * 0.1,
+        0.6
       );
     }
-    const fall = mesh(new THREE.CapsuleGeometry(0.11, 0.55, 6, 12), hairMat);
-    fall.position.set(0, -0.32, -0.15);
-    fall.scale.set(1.5, 1, 0.7);
-    fall.rotation.x = 0.18;
+    const fall = mesh(new THREE.CapsuleGeometry(0.1, 0.55, 6, 12), hairMat);
+    fall.position.set(0, -0.3, -0.17);
+    fall.scale.set(1.3, 1, 0.65);
+    fall.rotation.x = 0.28;
     head.add(fall);
   } else if (character.id === "ron") {
     addSmoothCrown(head, hairMat, { scaleX: 1.05, scaleY: 1.0, scaleZ: 1.08, y: 0.05 });
