@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mat, mesh } from "./materials.js";
-import { HP_GLB } from "./assets.js";
+import { HP_GLB, characterGlbUrl } from "./assets.js";
 
 export const CHARACTERS = [
   {
@@ -502,8 +502,59 @@ export function applyHollyWandGlb(player, assets) {
   return true;
 }
 
-export function createPlayer(characterId) {
+/**
+ * Prefer Blender character GLBs (exported on windows-64gb) when present.
+ * Requires named nodes: hips, head, armL, armR, wand, wandTip.
+ */
+function tryCreatePlayerFromGlb(character, assets) {
+  if (!assets) return null;
+  const scene = assets.cloneScene(characterGlbUrl(character.id));
+  if (!scene) return null;
+
+  assets.fitModel(scene, 1.7);
+
+  const root = new THREE.Group();
+  const model = new THREE.Group();
+  model.add(scene);
+  root.add(model);
+
+  const hips = assets.findNamed(scene, "hips");
+  const head = assets.findNamed(scene, "head");
+  const armL = assets.findNamed(scene, "armL");
+  const armR = assets.findNamed(scene, "armR");
+  const wand = assets.findNamed(scene, "wand");
+  const wandTip = assets.findNamed(scene, "wandTip");
+
+  if (!hips || !head || !armL || !armR || !wand || !wandTip) {
+    console.warn(`[characters] ${character.id}.glb missing rig nodes; using procedural hero`);
+    return null;
+  }
+
+  // Keep bob baseline consistent with the procedural rig.
+  if (Math.abs(hips.position.y) < 0.01) hips.position.y = 0.92;
+
+  return {
+    id: character.id,
+    name: character.name,
+    stats: { ...character.stats },
+    root,
+    model,
+    hips,
+    armR,
+    armL,
+    head,
+    wandTip,
+    wand,
+    facing: new THREE.Vector3(0, 0, 1),
+    fromGlb: true,
+  };
+}
+
+export function createPlayer(characterId, assets = null) {
   const character = getCharacter(characterId);
+  const fromGlb = tryCreatePlayerFromGlb(character, assets);
+  if (fromGlb) return fromGlb;
+
   const root = new THREE.Group();
   const model = new THREE.Group();
 
