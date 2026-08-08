@@ -2,13 +2,25 @@
 
 Third-person browser adventure inspired by the Mordor's Adventures prototype. Cast the full movie-era spell list, choose Harry, Hermione, Ron, Ginny, or Luna each run, and play six events from the first film in order.
 
-## Run
+## Run (always on Mac)
+
+Play host is **mac-m2**. Windows is for Blender GLB export only — do not rely on Zach_PC `:4174` from the Mac browser (`localhost` is the wrong machine).
 
 ```bash
+cd ~/Projects/harry-potter-philosophers-stone   # or your Mac clone path
+git pull
 npm start
 ```
 
-Open [http://localhost:4174](http://localhost:4174).
+Open [http://localhost:4174](http://localhost:4174) **on the Mac**.
+
+Windows asset rebuild (when meshes change):
+
+```powershell
+cd C:\Users\zbova\Projects\harry-potter-philosophers-stone
+powershell -ExecutionPolicy Bypass -File .\tools\blender\export_all.ps1
+git add assets && git commit -m "Re-export Blender GLBs" && git push
+```
 
 ## Controls
 
