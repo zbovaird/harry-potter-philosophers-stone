@@ -1,10 +1,10 @@
-# Build Philosopher's Stone GLB props via headless Blender (Windows).
+# Build Philosopher's Stone GLB props + characters via headless Blender (Windows).
+# Intended host: windows-64gb (Zach_PC). Do not run Blender exports on the Mac/cloud agent.
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not (Test-Path (Join-Path $Repo "package.json"))) {
   $Repo = "C:\Users\zbova\Projects\harry-potter-philosophers-stone"
 }
-$Script = Join-Path $Repo "tools\blender\build_hp_props.py"
 $Blender = @(
   "${env:ProgramFiles}\Blender Foundation\Blender 5.2\blender.exe",
   "${env:ProgramFiles}\Blender Foundation\Blender 4.5\blender.exe",
@@ -16,14 +16,29 @@ if (-not $Blender) {
 }
 
 Write-Host "Using $Blender"
-Write-Host "Script $Script"
-& $Blender --background --python $Script
-if ($LASTEXITCODE -ne 0) { throw "Blender export failed with exit $LASTEXITCODE" }
+Write-Host "Repo $Repo"
+
+function Invoke-BlenderScript([string]$RelativeScript) {
+  $Script = Join-Path $Repo $RelativeScript
+  if (-not (Test-Path $Script)) { throw "Missing $Script" }
+  Write-Host "Running $RelativeScript"
+  & $Blender --background --python $Script
+  if ($LASTEXITCODE -ne 0) { throw "Blender failed ($RelativeScript) exit $LASTEXITCODE" }
+}
+
+Invoke-BlenderScript "tools\blender\build_hp_props.py"
 
 $Snitch = Join-Path $Repo "tools\blender\build_golden_snitch.py"
 if (Test-Path $Snitch) {
-  & $Blender --background --python $Snitch
-  if ($LASTEXITCODE -ne 0) { throw "Snitch export failed with exit $LASTEXITCODE" }
+  Invoke-BlenderScript "tools\blender\build_golden_snitch.py"
 }
 
-Get-ChildItem (Join-Path $Repo "assets\props\*.glb") | Format-Table Name, Length, LastWriteTime
+Invoke-BlenderScript "tools\blender\build_hp_characters.py"
+
+Write-Host "`nProps:"
+Get-ChildItem (Join-Path $Repo "assets\props\*.glb") -ErrorAction SilentlyContinue |
+  Format-Table Name, Length, LastWriteTime
+
+Write-Host "Characters:"
+Get-ChildItem (Join-Path $Repo "assets\characters\*.glb") -ErrorAction SilentlyContinue |
+  Format-Table Name, Length, LastWriteTime

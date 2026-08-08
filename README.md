@@ -44,13 +44,13 @@ Progress unlocks in order and is stored in `localStorage` (`hpPsProgress`).
 
 ## Fable / GLB assets
 
-Blender props ship under `assets/props/` (`holly_wand`, `ollivander_box`, `flying_key`, `golden_snitch`). Rebuild on Windows:
+Blender props live under `assets/props/`; playable heroes under `assets/characters/`. **Exports run on windows-64gb only** (not Mac/cloud):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\blender\export_all.ps1
 ```
 
-Drop character exports into `assets/characters/` (e.g. `harry.glb`). `AssetLibrary` preloads `HP_GLB` URLs; heroes still fall back to procedural meshes when a GLB is missing.
+`AssetLibrary` preloads prop + character URLs. Missing GLBs fall back to procedural meshes in `js/characters.js`.
 
 ## Attribution
 

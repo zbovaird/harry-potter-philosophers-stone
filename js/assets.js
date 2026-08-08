@@ -8,6 +8,11 @@ export const HP_GLB = {
   goldenSnitch: "./assets/props/golden_snitch.glb",
 };
 
+/** Playable hero GLBs exported on windows-64gb via tools/blender/build_hp_characters.py */
+export function characterGlbUrl(id) {
+  return `./assets/characters/${id}.glb`;
+}
+
 export class AssetLibrary {
   constructor() {
     this.loader = new GLTFLoader();

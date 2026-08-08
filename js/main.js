@@ -17,11 +17,11 @@ import {
 import { getQuest } from "./quests.js";
 import { tryAccioKey } from "./levels/trapdoor.js";
 import { castPatronusInForest } from "./levels/forest.js";
-import { createPlayer, getCharacter, applyHollyWandGlb } from "./characters.js";
+import { CHARACTERS, createPlayer, getCharacter, applyHollyWandGlb } from "./characters.js";
 import { setupCharacterSelect } from "./characterSelect.js";
 import { SpellCaster, getSpell, SPELLS, HOTBAR_SIZE } from "./spells.js";
 import { CombatState, applySpellEffect } from "./combat.js";
-import { AssetLibrary, HP_GLB } from "./assets.js";
+import { AssetLibrary, HP_GLB, characterGlbUrl } from "./assets.js";
 import { buildDiagonLevel, resetDiagonQuest, updateDiagonLevel, diagonSpawn } from "./levels/diagon.js";
 import { buildHogwartsLevel, resetHogwartsQuest, updateHogwartsLevel, hogwartsSpawn } from "./levels/hogwarts.js";
 import { buildTrollLevel, resetTrollQuest, updateTrollLevel, trollSpawn } from "./levels/troll.js";
@@ -204,7 +204,10 @@ class Game {
     try {
       await this.textures.load();
       this.setLoading(35);
-      await this.assets.preload(Object.values(HP_GLB));
+      await this.assets.preload([
+        ...Object.values(HP_GLB),
+        ...CHARACTERS.map((c) => characterGlbUrl(c.id)),
+      ]);
       this.setLoading(55);
       await this.loadHdrEnvironment();
       this.setLoading(85);
@@ -342,7 +345,7 @@ class Game {
     if (this.player) {
       this.scene.remove(this.player.root);
     }
-    this.player = createPlayer(id);
+    this.player = createPlayer(id, this.assets);
     applyHollyWandGlb(this.player, this.assets);
     this.scene.add(this.player.root);
     const stats = this.player.stats;

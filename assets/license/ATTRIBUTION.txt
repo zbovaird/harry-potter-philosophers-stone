@@ -20,13 +20,14 @@ Procedural
 ----------
 - Brick, cobblestone, and slate roof maps generated at runtime in js/textures.js
 - Tudor shop architecture, gas lamps, props in js/diagonProps.js
-- Character heroes in js/characters.js
+- Character heroes fallback in js/characters.js when GLBs are missing
 
-Blender GLB props (original, CC0 for this fan project)
-------------------------------------------------------
-Built headless on Windows via tools/blender/*.py:
+Blender GLB assets (original, CC0 for this fan project)
+-------------------------------------------------------
+Built headless on windows-64gb via tools/blender/*.py:
 - holly_wand.glb, ollivander_box.glb, flying_key.glb, golden_snitch.glb
 - golden_snitch.glb scaffold drafted with local Ollama qwen3-coder:30b
+- assets/characters/<id>.glb playable heroes (build_hp_characters.py)
 
 Audio
 -----
