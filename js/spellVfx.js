@@ -35,14 +35,21 @@ export class SpellVfxSystem {
     this.rings = [];
     this._impactRingTemplate = null;
     this._protegoTemplate = null;
+    this._patronusTemplate = null;
     this._castLightPool = [];
+    this.patronusBursts = [];
   }
 
   async preload() {
     if (!this.assets) return;
-    await this.assets.preload([HP_GLB.spellImpactRing, HP_GLB.protegoDome]);
+    await this.assets.preload([
+      HP_GLB.spellImpactRing,
+      HP_GLB.protegoDome,
+      HP_GLB.patronusStag,
+    ]);
     this._impactRingTemplate = this.assets.cloneScene(HP_GLB.spellImpactRing);
     this._protegoTemplate = this.assets.cloneScene(HP_GLB.protegoDome);
+    this._patronusTemplate = this.assets.cloneScene(HP_GLB.patronusStag);
   }
 
   clear() {
@@ -58,6 +65,7 @@ export class SpellVfxSystem {
     this.beams.length = 0;
     this.shields.length = 0;
     this.rings.length = 0;
+    this.patronusBursts.length = 0;
   }
 
   castFlash(origin, color, intensity = 1.0) {
@@ -199,6 +207,60 @@ export class SpellVfxSystem {
     this.beams.push({ mesh, inner, life, maxLife: life });
   }
 
+  spawnPatronus(origin, direction) {
+    const root = new THREE.Group();
+    root.position.copy(origin);
+
+    if (this._patronusTemplate) {
+      const stag = this._patronusTemplate.clone(true);
+      stag.scale.setScalar(0.55);
+      stag.traverse((o) => {
+        if (o.isMesh && o.material) {
+          o.material = o.material.clone();
+          o.material.color?.setHex(0xddeeff);
+          o.material.emissive?.setHex(0xaaccff);
+          o.material.emissiveIntensity = 1.6;
+          o.material.transparent = true;
+          o.material.opacity = 0.88;
+          o.material.depthWrite = false;
+        }
+      });
+      root.add(stag);
+    }
+
+    const mistCount = 48;
+    const positions = new Float32Array(mistCount * 3);
+    for (let i = 0; i < mistCount; i += 1) {
+      positions[i * 3] = direction.x * i * 0.15 + (Math.random() - 0.5) * 0.4;
+      positions[i * 3 + 1] = direction.y * i * 0.08 + Math.random() * 0.3;
+      positions[i * 3 + 2] = direction.z * i * 0.15 + (Math.random() - 0.5) * 0.4;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mist = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        color: 0xeef8ff,
+        size: 0.16,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      })
+    );
+    root.add(mist);
+
+    this.scene.add(root);
+    this.patronusBursts.push({
+      root,
+      mist,
+      life: 1.8,
+      maxLife: 1.8,
+      velocity: direction.clone().multiplyScalar(8),
+    });
+  }
+
   spawnExplosion(position, radius, color) {
     this.spawnImpact(position, color, "shockwave", 1 + radius * 0.35);
     const ringGeo = new THREE.RingGeometry(radius * 0.2, radius * 0.95, 32);
@@ -329,6 +391,20 @@ export class SpellVfxSystem {
         fx.mesh.geometry.dispose();
         fx.mesh.material.dispose();
         this.rings.splice(i, 1);
+      }
+    }
+
+    for (let i = this.patronusBursts.length - 1; i >= 0; i -= 1) {
+      const fx = this.patronusBursts[i];
+      fx.life -= delta;
+      fx.root.position.addScaledVector(fx.velocity, delta);
+      fx.root.scale.setScalar(1 + (1 - fx.life / fx.maxLife) * 0.6);
+      fx.mist.material.opacity = (fx.life / fx.maxLife) * 0.85;
+      if (fx.life <= 0) {
+        this.scene.remove(fx.root);
+        fx.mist.geometry.dispose();
+        fx.mist.material.dispose();
+        this.patronusBursts.splice(i, 1);
       }
     }
   }

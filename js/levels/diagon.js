@@ -146,6 +146,13 @@ function placeBlenderProps(game, group, pedestal) {
     snitch.scale.setScalar(2.4);
     group.add(snitch);
   }
+
+  const cauldron = assets.cloneScene(HP_GLB.cauldron);
+  if (cauldron) {
+    cauldron.position.set(-4.2, 0, 10.8);
+    cauldron.scale.setScalar(1.1);
+    group.add(cauldron);
+  }
 }
 
 function createFeatherProp() {

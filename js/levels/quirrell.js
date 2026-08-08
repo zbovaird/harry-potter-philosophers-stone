@@ -11,6 +11,10 @@ import { tickBoss, hasShield } from "../bossAI.js";
 
 export const QUIRRELL_ORIGIN = new THREE.Vector3(0, 0, 1000);
 
+const _from = new THREE.Vector3();
+const _to = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+
 export function buildQuirrellLevel(game) {
   const group = new THREE.Group();
   group.name = "quirrell";
@@ -70,6 +74,7 @@ export function resetQuirrellQuest(game) {
   if (!data) return;
   data.mirrorSeen = false;
   data.stoneClaimed = false;
+  game.enemyBolts?.clear();
   const q = data.quirrell;
   q.hp = q.maxHp;
   q.alive = true;
@@ -84,6 +89,42 @@ export function resetQuirrellQuest(game) {
   q.root.position.set(0, 0, 4);
   q.root.rotation.set(0, 0, 0);
   q.root.scale.setScalar(1);
+}
+
+function spawnQuirrellCurseBolt(game, q) {
+  q.root.getWorldPosition(_from);
+  _from.y += 1.25;
+  game.player.root.getWorldPosition(_to);
+  _to.y += 0.95;
+  _dir.copy(_to).sub(_from);
+  if (_dir.lengthSq() < 0.01) return;
+  _dir.normalize();
+
+  game.showMessage("Quirrell casts — Protego!", 0.8);
+  game.enemyBolts.spawn({
+    origin: _from.clone(),
+    direction: _dir,
+    color: 0x44ff66,
+    speed: 17,
+    life: 2.4,
+    radius: 0.2,
+    onPlayerHit: () => {
+      if (!game.combat?.alive) return;
+      if (hasShield(game)) {
+        game.showMessage("Protego deflects the curse!");
+        game.fx.addTrauma(0.2);
+        game.spellVfx.spawnImpact(_to, 0x88aaff, "spark", 1.2);
+        return;
+      }
+      const dealt = game.combat.damage(12);
+      if (dealt > 0) {
+        game.audio.hurt();
+        game.fx.addTrauma(0.4);
+        game.fx.flashDamage(0.8);
+        game.spellVfx.spawnImpact(_to, 0x44ff66, "smoke", 1.3);
+      }
+    },
+  });
 }
 
 export function updateQuirrellLevel(game, delta, time) {
@@ -116,34 +157,12 @@ export function updateQuirrellLevel(game, delta, time) {
     name: "Quirrell",
   });
 
-  // Phase 2: ranged curse bolts the player must shield or dodge
   if (data.mirrorSeen && q.alive && q.phase >= 2 && q.boltCd <= 0 && !q.winding && q.stun <= 0) {
     const playerLocal = game.player.root.position.clone().sub(QUIRRELL_ORIGIN);
     const dist = playerLocal.distanceTo(q.root.position);
     if (dist > 3 && dist < 18) {
       q.boltCd = 2.4;
-      game.showMessage("Quirrell casts — Protego!", 0.8);
-      // Delayed hit resolves next frames via pendingBolt
-      q.pendingBolt = 0.45;
-    }
-  }
-
-  if (q.pendingBolt != null) {
-    q.pendingBolt -= delta;
-    if (q.pendingBolt <= 0) {
-      q.pendingBolt = null;
-      if (!q.alive || !game.combat?.alive) return;
-      if (hasShield(game)) {
-        game.showMessage("Protego deflects the curse!");
-        game.fx.addTrauma(0.2);
-      } else {
-        const dealt = game.combat.damage(12);
-        if (dealt > 0) {
-          game.audio.hurt();
-          game.fx.addTrauma(0.4);
-          game.fx.flashDamage(0.8);
-        }
-      }
+      spawnQuirrellCurseBolt(game, q);
     }
   }
 }

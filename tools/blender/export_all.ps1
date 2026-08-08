@@ -33,6 +33,11 @@ if (Test-Path $SpellVfx) {
   Invoke-BlenderScript "tools\blender\build_spell_vfx.py"
 }
 
+$Patronus = Join-Path $Repo "tools\blender\build_patronus.py"
+if (Test-Path $Patronus) {
+  Invoke-BlenderScript "tools\blender\build_patronus.py"
+}
+
 $Snitch = Join-Path $Repo "tools\blender\build_golden_snitch.py"
 if (Test-Path $Snitch) {
   Invoke-BlenderScript "tools\blender\build_golden_snitch.py"

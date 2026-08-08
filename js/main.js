@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Input } from "./input.js";
 import { GameAudio } from "./audio.js";
 import { createEnvMap } from "./materials.js";
-import { FxPipeline, SpellBolt } from "./fx.js";
+import { FxPipeline, SpellBolt, EnemySpellBolt } from "./fx.js";
 import { SpellVfxSystem, getSpellVfxProfile } from "./spellVfx.js";
 import { Atmosphere } from "./atmosphere.js";
 import { TextureLibrary } from "./textures.js";
@@ -161,6 +161,7 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
     this.fx = new FxPipeline(this.renderer, this.scene, this.camera);
     this.bolts = new SpellBolt(this.scene);
+    this.enemyBolts = new EnemySpellBolt(this.scene);
     this.spellVfx = new SpellVfxSystem(this.scene, this.assets);
     this.atmosphere = new Atmosphere(this.scene, this.renderer);
 
@@ -482,6 +483,7 @@ class Game {
     this.cameraPitch = levelId === "diagon" ? 0.18 : 0.28;
     this.combat = new CombatState(this.player.stats);
     this.bolts.clear();
+    this.enemyBolts.clear();
     this.spellVfx.clear();
 
     this.atmosphere.apply(meta.atmosphere, { sun: this.sun, hemi: this.hemi, fx: this.fx });
@@ -665,7 +667,7 @@ class Game {
 
     if (!this.combat.spendMana(spell.mana)) return;
     this.caster.beginCooldown(spell, this.combat.castCooldownMul);
-    this.audio.cast((spell.color & 0xff) / 255);
+    this.audio.cast(spell);
     this.refreshHotbarUi();
 
     // Wand tip flash + cast burst
@@ -695,6 +697,9 @@ class Game {
     // Patronus: scare forest creatures + fire a bolt
     if (spell.effect === "patronus" && this.currentLevel === "forest") {
       castPatronusInForest(this);
+      const tip = new THREE.Vector3();
+      this.player.wandTip.getWorldPosition(tip);
+      this.spellVfx.spawnPatronus(tip, aim);
     }
 
     if (spell.type === "aoe") {
@@ -1105,10 +1110,18 @@ class Game {
       this.player.facing.copy(_wish).normalize();
       this.player.root.rotation.y = Math.atan2(this.player.facing.x, this.player.facing.z);
       const bob = Math.sin(this.time * (move.run ? 12 : 8)) * 0.04;
-      this.player.hips.position.y = 0.92 + bob;
+      if (this.player.bobModel) {
+        this.player.model.position.y = bob;
+      } else {
+        this.player.hips.position.y = 0.92 + bob;
+      }
     } else {
       this.player.root.rotation.y = this.cameraYaw;
-      this.player.hips.position.y = 0.92;
+      if (this.player.bobModel) {
+        this.player.model.position.y = 0;
+      } else {
+        this.player.hips.position.y = 0.92;
+      }
     }
 
     // Recover cast arm
@@ -1148,6 +1161,8 @@ class Game {
       quirrell: updateQuirrellLevel,
     };
     updaters[this.currentLevel]?.(this, delta, this.time);
+
+    this.enemyBolts.update(delta, this.player?.root, 0.55);
 
     const { hits, expired } = this.bolts.update(delta, this.getActiveEnemies(), this.time);
     for (const { bolt, target, hitPos } of hits) {

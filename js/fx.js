@@ -287,3 +287,84 @@ export class SpellBolt {
     this.active.length = 0;
   }
 }
+
+const _playerHit = new THREE.Vector3();
+
+/** Hostile curse bolts (Quirrell → player). */
+export class EnemySpellBolt {
+  constructor(scene) {
+    this.scene = scene;
+    this.active = [];
+    this._geo = new THREE.SphereGeometry(1, 8, 8);
+    this._mat = new THREE.MeshBasicMaterial({
+      color: 0x66ff66,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+  }
+
+  spawn({ origin, direction, color = 0x66ff66, speed = 18, life = 2.2, radius = 0.18, onPlayerHit }) {
+    const group = new THREE.Group();
+    group.position.copy(origin);
+    const core = new THREE.Mesh(this._geo, this._mat.clone());
+    core.material.color.setHex(color);
+    core.scale.setScalar(radius);
+    group.add(core);
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 6, 6),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    glow.scale.setScalar(radius * 2.2);
+    group.add(glow);
+    this.scene.add(group);
+    this.active.push({
+      group,
+      core,
+      glow,
+      velocity: direction.clone().normalize().multiplyScalar(speed),
+      life,
+      maxLife: life,
+      radius,
+      onPlayerHit,
+      color,
+    });
+  }
+
+  update(delta, playerRoot, hitRadius = 0.55) {
+    if (!playerRoot) return;
+    playerRoot.getWorldPosition(_playerHit);
+    _playerHit.y += 0.95;
+    for (let i = this.active.length - 1; i >= 0; i -= 1) {
+      const bolt = this.active[i];
+      bolt.life -= delta;
+      bolt.group.position.addScaledVector(bolt.velocity, delta);
+      const lifeT = bolt.life / bolt.maxLife;
+      bolt.core.material.opacity = Math.max(0.2, lifeT);
+      bolt.glow.material.opacity = Math.max(0.1, lifeT * 0.4);
+
+      const dist = bolt.group.position.distanceTo(_playerHit);
+      const expired = bolt.life <= 0 || bolt.group.position.y < -2;
+      if (dist < hitRadius + bolt.radius) {
+        bolt.onPlayerHit?.(bolt.group.position.clone());
+        this.scene.remove(bolt.group);
+        this.active.splice(i, 1);
+      } else if (expired) {
+        this.scene.remove(bolt.group);
+        this.active.splice(i, 1);
+      }
+    }
+  }
+
+  clear() {
+    for (const bolt of this.active) this.scene.remove(bolt.group);
+    this.active.length = 0;
+  }
+}
