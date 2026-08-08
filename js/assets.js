@@ -6,6 +6,11 @@ export const HP_GLB = {
   ollivanderBox: "./assets/props/ollivander_box.glb",
   flyingKey: "./assets/props/flying_key.glb",
   goldenSnitch: "./assets/props/golden_snitch.glb",
+  spellImpactRing: "./assets/props/spell_impact_ring.glb",
+  protegoDome: "./assets/props/protego_dome.glb",
+  patronusStag: "./assets/props/patronus_stag.glb",
+  cauldron: "./assets/props/cauldron.glb",
+  houseBanner: "./assets/props/house_banner.glb",
 };
 
 /** Playable hero GLBs exported on windows-64gb via tools/blender/build_hp_characters.py */
@@ -70,6 +75,32 @@ export class AssetLibrary {
     if (size.y < 0.01) return root;
     const scale = targetHeight / size.y;
     root.scale.multiplyScalar(scale);
+    return root;
+  }
+
+  /** Stand Blender character up and scale to target height (fixes sideways GLBs). */
+  normalizeStandingModel(root, targetHeight = 1.7) {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    if (size.z >= size.y * 0.95 && size.z >= size.x) {
+      root.rotation.x += Math.PI / 2;
+    } else if (size.x >= size.y * 0.95 && size.x >= size.z) {
+      root.rotation.z += -Math.PI / 2;
+    }
+
+    root.updateMatrixWorld(true);
+    const box2 = new THREE.Box3().setFromObject(root);
+    const size2 = box2.getSize(new THREE.Vector3());
+    const height = Math.max(size2.y, 0.01);
+    root.scale.multiplyScalar(targetHeight / height);
+    root.updateMatrixWorld(true);
+
+    const box3 = new THREE.Box3().setFromObject(root);
+    root.position.y -= box3.min.y;
+    root.updateMatrixWorld(true);
     return root;
   }
 }

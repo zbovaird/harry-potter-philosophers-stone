@@ -511,12 +511,12 @@ function tryCreatePlayerFromGlb(character, assets) {
   const scene = assets.cloneScene(characterGlbUrl(character.id));
   if (!scene) return null;
 
-  assets.fitModel(scene, 1.7);
-
   const root = new THREE.Group();
   const model = new THREE.Group();
   model.add(scene);
   root.add(model);
+
+  assets.normalizeStandingModel(scene, 1.7);
 
   const hips = assets.findNamed(scene, "hips");
   const head = assets.findNamed(scene, "head");
@@ -529,9 +529,6 @@ function tryCreatePlayerFromGlb(character, assets) {
     console.warn(`[characters] ${character.id}.glb missing rig nodes; using procedural hero`);
     return null;
   }
-
-  // Keep bob baseline consistent with the procedural rig.
-  if (Math.abs(hips.position.y) < 0.01) hips.position.y = 0.92;
 
   return {
     id: character.id,
@@ -547,6 +544,7 @@ function tryCreatePlayerFromGlb(character, assets) {
     wand,
     facing: new THREE.Vector3(0, 0, 1),
     fromGlb: true,
+    bobModel: true,
   };
 }
 

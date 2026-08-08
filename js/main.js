@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { Input } from "./input.js";
 import { GameAudio } from "./audio.js";
 import { createEnvMap } from "./materials.js";
-import { FxPipeline, SpellBolt } from "./fx.js";
+import { FxPipeline, SpellBolt, EnemySpellBolt } from "./fx.js";
+import { SpellVfxSystem, getSpellVfxProfile } from "./spellVfx.js";
 import { Atmosphere } from "./atmosphere.js";
 import { TextureLibrary } from "./textures.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
@@ -160,6 +161,8 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
     this.fx = new FxPipeline(this.renderer, this.scene, this.camera);
     this.bolts = new SpellBolt(this.scene);
+    this.enemyBolts = new EnemySpellBolt(this.scene);
+    this.spellVfx = new SpellVfxSystem(this.scene, this.assets);
     this.atmosphere = new Atmosphere(this.scene, this.renderer);
 
     this.hemi = new THREE.HemisphereLight(0xffe8d0, 0x3a2a22, 0.65);
@@ -208,6 +211,7 @@ class Game {
         ...Object.values(HP_GLB),
         ...CHARACTERS.map((c) => characterGlbUrl(c.id)),
       ]);
+      await this.spellVfx.preload();
       this.setLoading(55);
       await this.loadHdrEnvironment();
       this.setLoading(85);
@@ -479,6 +483,8 @@ class Game {
     this.cameraPitch = levelId === "diagon" ? 0.18 : 0.28;
     this.combat = new CombatState(this.player.stats);
     this.bolts.clear();
+    this.enemyBolts.clear();
+    this.spellVfx.clear();
 
     this.atmosphere.apply(meta.atmosphere, { sun: this.sun, hemi: this.hemi, fx: this.fx });
     this.audio.playTheme(meta.music);
@@ -532,8 +538,7 @@ class Game {
     slots.forEach((slot, i) => {
       slot.classList.toggle("active", i === this.caster.selected);
       const spell = getSpell(this.caster.hotbar[i]);
-      const cd = this.caster.cooldowns[spell.id] || 0;
-      slot.classList.toggle("on-cooldown", cd > 0.05);
+      slot.classList.toggle("on-cooldown", this.caster.globalCastLock > 0.05);
     });
   }
 
@@ -650,8 +655,10 @@ class Game {
     // Allow casting any spell from full book via holding Q to open next utility — simplify:
     // Number keys select hotbar; for utilities, cycle with R through extended list
     if (!spell) return;
-    if (!this.caster.canCast(spell, this.combat.mana, this.combat.castCooldownMul)) {
-      if (this.combat.mana < spell.mana) this.showMessage("Not enough mana.", 1.2);
+    if (!this.caster.canCast(spell, this.combat.mana)) {
+      if (this.combat.mana < spell.mana) {
+        this.showMessage(`Need ${spell.mana} mana (have ${Math.floor(this.combat.mana)}).`, 1.0);
+      }
       return;
     }
     if (spell.restricted && this.currentLevel !== "quirrell") {
@@ -660,13 +667,15 @@ class Game {
     }
 
     if (!this.combat.spendMana(spell.mana)) return;
-    this.caster.beginCooldown(spell, this.combat.castCooldownMul);
-    this.audio.cast((spell.color & 0xff) / 255);
+    this.caster.beginCastLock(this.combat.castCooldownMul);
+    this.audio.cast(spell);
     this.refreshHotbarUi();
 
-    // Wand tip flash
+    // Wand tip flash + cast burst
     const tip = new THREE.Vector3();
     this.player.wandTip.getWorldPosition(tip);
+    const vfxProfile = getSpellVfxProfile(spell);
+    this.spellVfx.castFlash(tip, spell.color, vfxProfile.castFlash || 1);
 
     _forward.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
     const aim = new THREE.Vector3(
@@ -689,6 +698,9 @@ class Game {
     // Patronus: scare forest creatures + fire a bolt
     if (spell.effect === "patronus" && this.currentLevel === "forest") {
       castPatronusInForest(this);
+      const tip = new THREE.Vector3();
+      this.player.wandTip.getWorldPosition(tip);
+      this.spellVfx.spawnPatronus(tip, aim);
     }
 
     if (spell.type === "aoe") {
@@ -700,17 +712,24 @@ class Game {
         life: spell.life,
         radius: 0.2,
         spellId: spell.id,
+        spell,
         damage: spell.damage * this.combat.damageMul,
       });
-      // Immediate nearby AoE as well
       const enemies = this.getActiveEnemies();
+      let hitAny = false;
       for (const e of enemies) {
         if (!e.alive) continue;
         const world = e.root.getWorldPosition(new THREE.Vector3());
         if (world.distanceTo(this.player.root.position) < (spell.radius || 3)) {
           applySpellEffect(e, spell, this.combat.damageMul);
-          this.onEnemyHit(e, spell);
+          this.onEnemyHit(e, spell, world);
+          hitAny = true;
         }
+      }
+      const blastPos = tip.clone().addScaledVector(aim, 2.2);
+      this.spellVfx.spawnExplosion(blastPos, spell.radius || 3, spell.color);
+      if (!hitAny) {
+        this.spellVfx.spawnImpact(blastPos, spell.color, vfxProfile.impact || "shockwave", 1.4);
       }
       return;
     }
@@ -722,7 +741,9 @@ class Game {
       let bestDot = 0.55;
       for (const e of enemies) {
         if (!e.alive) continue;
-        const to = e.root.getWorldPosition(new THREE.Vector3()).sub(this.player.root.position).normalize();
+        const world = e.root.getWorldPosition(new THREE.Vector3());
+        world.y += e.hitHeight ?? 1.1;
+        const to = world.clone().sub(this.player.root.position).normalize();
         const dot = to.dot(aim);
         if (dot > bestDot) {
           bestDot = dot;
@@ -730,8 +751,14 @@ class Game {
         }
       }
       if (best) {
+        const targetPos = best.root.getWorldPosition(new THREE.Vector3());
+        targetPos.y += best.hitHeight ?? 1.1;
+        this.spellVfx.spawnBeam(tip, targetPos, spell.color, spell.life || 0.35);
         applySpellEffect(best, spell, this.combat.damageMul);
-        this.onEnemyHit(best, spell);
+        this.onEnemyHit(best, spell, targetPos);
+      } else {
+        const missEnd = tip.clone().addScaledVector(aim, 8);
+        this.spellVfx.spawnBeam(tip, missEnd, spell.color, 0.2);
       }
       return;
     }
@@ -767,8 +794,9 @@ class Game {
       color: spell.color,
       speed: spell.speed,
       life: spell.life,
-      radius: 0.22,
+      radius: spell.effect === "patronus" ? 0.28 : 0.18,
       spellId: spell.id,
+      spell,
       damage: spell.damage * this.combat.damageMul,
     });
 
@@ -780,6 +808,7 @@ class Game {
     const now = this.time;
     if (spell.effect === "shield") {
       this.caster.shieldUntil = now + (spell.duration || 2.5);
+      this.spellVfx.showShield(this.player.root, spell.duration || 2.5, spell.color, this.time);
       this.showMessage("Protego!", 1);
     } else if (spell.effect === "heal") {
       this.combat.heal(spell.heal || 25);
@@ -886,9 +915,13 @@ class Game {
     }
   }
 
-  onEnemyHit(enemy, spell) {
+  onEnemyHit(enemy, spell, impactPos = null) {
     this.audio.hit();
     this.fx.addTrauma(0.2);
+    const pos = impactPos || enemy.root.getWorldPosition(new THREE.Vector3());
+    pos.y += enemy.hitHeight ?? 1.1;
+    const profile = getSpellVfxProfile(spell);
+    this.spellVfx.spawnImpact(pos, spell?.color ?? 0xffffff, profile.impact || "spark", 1.1);
     if (!enemy.alive) {
       enemy.root.scale.setScalar(0.01);
       enemy.root.visible = enemy.training ? false : true;
@@ -943,22 +976,14 @@ class Game {
 
     const spell = this.caster?.getSelectedSpell();
     const status = spell
-      ? `Spell: ${spell.name} · Mana ${spell.mana} · CD ${(this.caster.cooldowns[spell.id] || 0).toFixed(1)}s`
+      ? `Spell: ${spell.name} · Mana ${spell.mana}`
       : "Spells ready";
     if (status !== this._lastStatus) {
       this._lastStatus = status;
       this.ui.status.textContent = status;
     }
 
-    // Cooldown rings need occasional hotbar refresh
-    let anyCd = false;
-    for (const id of this.caster.hotbar) {
-      if ((this.caster.cooldowns[id] || 0) > 0) {
-        anyCd = true;
-        break;
-      }
-    }
-    if (anyCd) this._hotbarDirty = true;
+    if (this.caster.globalCastLock > 0) this._hotbarDirty = true;
   }
 
   resolveCollisions(pos) {
@@ -1078,10 +1103,18 @@ class Game {
       this.player.facing.copy(_wish).normalize();
       this.player.root.rotation.y = Math.atan2(this.player.facing.x, this.player.facing.z);
       const bob = Math.sin(this.time * (move.run ? 12 : 8)) * 0.04;
-      this.player.hips.position.y = 0.92 + bob;
+      if (this.player.bobModel) {
+        this.player.model.position.y = bob;
+      } else {
+        this.player.hips.position.y = 0.92 + bob;
+      }
     } else {
       this.player.root.rotation.y = this.cameraYaw;
-      this.player.hips.position.y = 0.92;
+      if (this.player.bobModel) {
+        this.player.model.position.y = 0;
+      } else {
+        this.player.hips.position.y = 0.92;
+      }
     }
 
     // Recover cast arm
@@ -1122,13 +1155,21 @@ class Game {
     };
     updaters[this.currentLevel]?.(this, delta, this.time);
 
-    const hits = this.bolts.update(delta, this.getActiveEnemies());
-    for (const { bolt, target } of hits) {
+    this.enemyBolts.update(delta, this.player?.root, 0.55);
+
+    const { hits, expired } = this.bolts.update(delta, this.getActiveEnemies(), this.time);
+    for (const { bolt, target, hitPos } of hits) {
       const spell = getSpell(bolt.spellId);
       if (spell) {
         applySpellEffect(target, spell, this.combat.damageMul);
-        this.onEnemyHit(target, spell);
+        this.onEnemyHit(target, spell, hitPos);
       }
+    }
+    for (const { bolt, hitPos } of expired) {
+      const spell = getSpell(bolt.spellId);
+      if (spell?.type === "aoe") continue;
+      const profile = getSpellVfxProfile(spell);
+      this.spellVfx.spawnImpact(hitPos, bolt.color, profile.impact || "spark", 0.8);
     }
     this.checkEnvironmentSpellHits();
 
@@ -1160,6 +1201,7 @@ class Game {
     if (this.state === "playing") {
       this.updatePlayer(delta);
       this.updateLevels(delta);
+      this.spellVfx.update(delta, this.time);
 
       this._contextAccum += delta;
       if (this._contextAccum >= CONTEXT_INTERVAL) {

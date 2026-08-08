@@ -1,6 +1,5 @@
 /**
- * Procedural music/SFX buses with optional future file loading.
- * Real Audio buffers can be dropped into assets/audio later.
+ * Procedural music/SFX with optional per-spell WAV loading.
  */
 export class GameAudio {
   constructor() {
@@ -11,6 +10,8 @@ export class GameAudio {
     this.sfxGain = null;
     this.musicNodes = [];
     this.currentTheme = null;
+    this.spellBuffers = new Map();
+    this.spellSoundsReady = false;
   }
 
   init() {
@@ -31,6 +32,41 @@ export class GameAudio {
     this.sfxGain.connect(this.master);
 
     this.enabled = true;
+    this.loadSpellSounds();
+  }
+
+  async loadSpellSounds() {
+    if (!this.ctx) return;
+    const ids = [
+      "expelliarmus", "stupefy", "impedimenta", "protego", "leviosa", "petrificus",
+      "incendio", "accio", "alohomora", "patronus", "avada", "crucio", "bombarda", "lumos", "finite",
+    ];
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const res = await fetch(`./assets/audio/spells/${id}.wav`);
+          if (!res.ok) return;
+          const buf = await res.arrayBuffer();
+          const audio = await this.ctx.decodeAudioData(buf);
+          this.spellBuffers.set(id, audio);
+        } catch {
+          /* fallback to procedural cast */
+        }
+      })
+    );
+    this.spellSoundsReady = true;
+  }
+
+  playBuffer(buffer, volume = 0.55) {
+    if (!this.enabled || !this.ctx || !buffer) return;
+    this.resume();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.start();
   }
 
   resume() {
@@ -137,8 +173,16 @@ export class GameAudio {
     }
   }
 
-  cast(spellColorHint = 0.5) {
-    const base = 320 + spellColorHint * 280;
+  cast(spellOrHint = 0.5) {
+    const spellId = typeof spellOrHint === "object" && spellOrHint?.id ? spellOrHint.id : null;
+    if (spellId && this.spellBuffers.has(spellId)) {
+      this.playBuffer(this.spellBuffers.get(spellId), 0.6);
+      return;
+    }
+    const hint = typeof spellOrHint === "object"
+      ? ((spellOrHint.color & 0xff) / 255)
+      : spellOrHint;
+    const base = 320 + hint * 280;
     this.tone({ frequency: base, slideTo: base * 1.8, duration: 0.18, type: "sine", volume: 0.07 });
     this.tone({ frequency: base * 0.5, duration: 0.1, type: "triangle", volume: 0.04, delay: 0.02 });
     this.noise({ duration: 0.06, volume: 0.03, filterFreq: 1800 });

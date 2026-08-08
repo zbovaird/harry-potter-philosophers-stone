@@ -26,6 +26,8 @@ Writes:
 | `assets/props/ollivander_box.glb` | Diagon Alley shop prop |
 | `assets/props/flying_key.glb` | Trapdoor flying keys |
 | `assets/props/golden_snitch.glb` | Diagon Quidditch display |
+| `assets/props/spell_impact_ring.glb` | Spell hit burst (Three.js `spellVfx.js`) |
+| `assets/props/protego_dome.glb` | Protego shield bubble |
 | `assets/characters/<id>.glb` | Playable heroes (`harry`, `hermione`, …) |
 
 Character GLBs must keep these object names so the game can animate them:

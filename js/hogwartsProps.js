@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { HP_GLB } from "./assets.js";
 
 function m(geometry, material, cast = true, receive = true) {
   const mesh = new THREE.Mesh(geometry, material);
@@ -123,6 +124,15 @@ export function buildHogwartsWorld(game, group, colliders) {
       capital.position.set(x, wallH - 0.4, z);
       group.add(capital);
     }
+  }
+
+  const bannerGlb = game.assets?.cloneScene(HP_GLB.houseBanner);
+  if (bannerGlb) {
+    bannerGlb.position.set(-14.8, 0, -6);
+    bannerGlb.rotation.y = Math.PI / 2;
+    bannerGlb.scale.setScalar(1.15);
+    group.add(bannerGlb);
+    anim.banners.push(bannerGlb);
   }
 
   // Vaulted ceiling beams
