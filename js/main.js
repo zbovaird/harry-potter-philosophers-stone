@@ -1078,10 +1078,18 @@ class Game {
       this.player.facing.copy(_wish).normalize();
       this.player.root.rotation.y = Math.atan2(this.player.facing.x, this.player.facing.z);
       const bob = Math.sin(this.time * (move.run ? 12 : 8)) * 0.04;
-      this.player.hips.position.y = 0.92 + bob;
+      if (this.player.bobModel) {
+        this.player.model.position.y = bob;
+      } else {
+        this.player.hips.position.y = 0.92 + bob;
+      }
     } else {
       this.player.root.rotation.y = this.cameraYaw;
-      this.player.hips.position.y = 0.92;
+      if (this.player.bobModel) {
+        this.player.model.position.y = 0;
+      } else {
+        this.player.hips.position.y = 0.92;
+      }
     }
 
     // Recover cast arm
