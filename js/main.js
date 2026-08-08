@@ -17,11 +17,11 @@ import {
 import { getQuest } from "./quests.js";
 import { tryAccioKey } from "./levels/trapdoor.js";
 import { castPatronusInForest } from "./levels/forest.js";
-import { createPlayer, getCharacter } from "./characters.js";
+import { createPlayer, getCharacter, applyHollyWandGlb } from "./characters.js";
 import { setupCharacterSelect } from "./characterSelect.js";
 import { SpellCaster, getSpell, SPELLS, HOTBAR_SIZE } from "./spells.js";
 import { CombatState, applySpellEffect } from "./combat.js";
-import { AssetLibrary } from "./assets.js";
+import { AssetLibrary, HP_GLB } from "./assets.js";
 import { buildDiagonLevel, resetDiagonQuest, updateDiagonLevel, diagonSpawn } from "./levels/diagon.js";
 import { buildHogwartsLevel, resetHogwartsQuest, updateHogwartsLevel, hogwartsSpawn } from "./levels/hogwarts.js";
 import { buildTrollLevel, resetTrollQuest, updateTrollLevel, trollSpawn } from "./levels/troll.js";
@@ -203,7 +203,9 @@ class Game {
     this.setLoading(5);
     try {
       await this.textures.load();
-      this.setLoading(45);
+      this.setLoading(35);
+      await this.assets.preload(Object.values(HP_GLB));
+      this.setLoading(55);
       await this.loadHdrEnvironment();
       this.setLoading(85);
     } catch (err) {
@@ -341,11 +343,19 @@ class Game {
       this.scene.remove(this.player.root);
     }
     this.player = createPlayer(id);
+    applyHollyWandGlb(this.player, this.assets);
     this.scene.add(this.player.root);
     const stats = this.player.stats;
     this.combat = new CombatState(stats);
     this.caster = new SpellCaster(this.audio);
+    this.hasWand = false;
+    this.setWandEquipped(false);
     this.ui.playerName.textContent = this.player.name;
+  }
+
+  setWandEquipped(equipped) {
+    this.hasWand = Boolean(equipped);
+    if (this.player?.wand) this.player.wand.visible = this.hasWand;
   }
 
   showLevelSelect() {
@@ -441,6 +451,15 @@ class Game {
     };
     resets[levelId]?.(this);
 
+    // Wand comes from Ollivanders first; later levels start with it equipped.
+    if (levelId === "diagon") {
+      this.setWandEquipped(false);
+      const pedestalWand = this.levelData.diagon?.pedestal?.userData?.wand;
+      if (pedestalWand) pedestalWand.visible = true;
+    } else {
+      this.setWandEquipped(true);
+    }
+
     const spawns = {
       diagon: diagonSpawn,
       hogwarts: hogwartsSpawn,
@@ -482,10 +501,11 @@ class Game {
       slot.className = "spell-slot";
       slot.dataset.index = String(i);
       const color = `#${spell.color.toString(16).padStart(6, "0")}`;
+      const label = spell.id === "leviosa" ? "W. Leviosa" : spell.name.split(" ")[0];
       slot.innerHTML = `
         <span class="key">${(i + 1) % 10}</span>
         <span class="swatch" style="background:${color};color:${color}"></span>
-        <span>${spell.name.split(" ")[0]}</span>
+        <span>${label}</span>
       `;
       slot.addEventListener("click", () => {
         this.caster.selectIndex(i);
@@ -618,6 +638,10 @@ class Game {
 
   castSelectedSpell() {
     if (!this.caster || !this.combat?.alive) return;
+    if (!this.hasWand) {
+      this.showMessage("You need a wand first — talk to Ollivander.", 1.6);
+      return;
+    }
     let spell = this.caster.getSelectedSpell();
 
     // Allow casting any spell from full book via holding Q to open next utility — simplify:
@@ -1157,4 +1181,5 @@ class Game {
   }
 }
 
-new Game();
+const __hpGame = new Game();
+if (typeof globalThis !== "undefined") globalThis.__hpGame = __hpGame;

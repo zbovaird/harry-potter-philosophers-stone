@@ -34,6 +34,7 @@ export const QUESTS = {
         if (ped?.wand) ped.wand.visible = false;
         if (ped?.tip) ped.tip.visible = false;
         if (ped?.glow) ped.glow.visible = false;
+        game.setWandEquipped?.(true);
         game.showMessage("The wand warms in your hand. Spells answer your call.");
         return "handled";
       }

@@ -28,8 +28,8 @@ export const SPELLS = [
   { id: "rennervate", name: "Rennervate", key: null, color: 0xffeecc, type: "utility", damage: 0, mana: 14, cooldown: 2, speed: 0, life: 0, effect: "revive" },
   { id: "engorgio", name: "Engorgio", key: null, color: 0xffaaee, type: "utility", damage: 0, mana: 12, cooldown: 1.5, speed: 0, life: 0, effect: "enlarge" },
   { id: "reducio", name: "Reducio", key: null, color: 0xeeaaff, type: "utility", damage: 0, mana: 12, cooldown: 1.5, speed: 0, life: 0, effect: "shrink" },
-  { id: "silencio", name: "Silencio", key: null, color: 0xccddee, type: "projectile", damage: 4, mana: 10, cooldown: 1.4, speed: 26, life: 1.3, effect: "silence" },
-  { id: "confundo", name: "Confundo", key: null, color: 0xffccaa, type: "projectile", damage: 6, mana: 14, cooldown: 1.6, speed: 24, life: 1.4, effect: "confuse" },
+  { id: "silencio", name: "Silencio", key: null, color: 0xccddee, type: "projectile", damage: 4, mana: 10, cooldown: 1.4, speed: 36, life: 4.2, effect: "silence" },
+  { id: "confundo", name: "Confundo", key: null, color: 0xffccaa, type: "projectile", damage: 6, mana: 14, cooldown: 1.6, speed: 34, life: 4.2, effect: "confuse" },
   { id: "obliviate", name: "Obliviate", key: null, color: 0xffffff, type: "utility", damage: 0, mana: 20, cooldown: 4, speed: 0, life: 0, effect: "memory", scripted: true },
 ];
 

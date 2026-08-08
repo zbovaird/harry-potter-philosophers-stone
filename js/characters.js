@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mat, mesh } from "./materials.js";
+import { HP_GLB } from "./assets.js";
 
 export const CHARACTERS = [
   {
@@ -476,6 +477,29 @@ function addBeard(head, character) {
 
 export function getCharacter(id) {
   return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0];
+}
+
+/** Swap the procedural wand for the Blender holly_wand.glb when available. */
+export function applyHollyWandGlb(player, assets) {
+  if (!player?.wand || !assets) return false;
+  const glb = assets.cloneScene(HP_GLB.hollyWand);
+  if (!glb) return false;
+
+  const tip = assets.findNamed(glb, "wandTip") || glb;
+  const parent = player.wand.parent;
+  const wasVisible = player.wand.visible;
+  const { position, rotation, scale } = player.wand;
+  parent.remove(player.wand);
+  glb.position.copy(position);
+  glb.rotation.copy(rotation);
+  glb.scale.copy(scale);
+  // Blender wand is ~0.36m along +Y; match prior hand pose scale.
+  glb.scale.multiplyScalar(1.05);
+  parent.add(glb);
+  player.wand = glb;
+  player.wandTip = tip;
+  player.wand.visible = wasVisible;
+  return true;
 }
 
 export function createPlayer(characterId) {

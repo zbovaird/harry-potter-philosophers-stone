@@ -11,6 +11,7 @@ import {
   mat,
   mesh,
 } from "../worldUtils.js";
+import { HP_GLB } from "../assets.js";
 
 export const DIAGON_ORIGIN = new THREE.Vector3(0, 0, 0);
 
@@ -90,14 +91,14 @@ function createWandPedestal(texLib) {
   );
   cushion.position.y = 1.14;
 
-  const wand = mesh(
+  let wand = mesh(
     new THREE.CylinderGeometry(0.012, 0.018, 0.42, 10),
     mat(0x2a1810, { roughness: 0.55, metalness: 0.1 })
   );
   wand.position.set(0, 1.28, 0);
   wand.rotation.z = 0.55;
   wand.rotation.y = 0.3;
-  const tip = mesh(
+  let tip = mesh(
     new THREE.SphereGeometry(0.02, 8, 8),
     mat(0xffe8a0, { emissive: 0xffcc66, emissiveIntensity: 1.2, roughness: 0.3 })
   );
@@ -111,6 +112,40 @@ function createWandPedestal(texLib) {
   root.userData.tip = tip;
   root.userData.glow = glow;
   return root;
+}
+
+function placeBlenderProps(game, group, pedestal) {
+  const assets = game.assets;
+  if (!assets) return;
+
+  const box = assets.cloneScene(HP_GLB.ollivanderBox);
+  if (box) {
+    box.position.set(-2.1, 0.02, 13.55);
+    box.rotation.y = 0.35;
+    box.scale.setScalar(1.15);
+    group.add(box);
+  }
+
+  const wandGlb = assets.cloneScene(HP_GLB.hollyWand);
+  if (wandGlb && pedestal) {
+    const old = pedestal.userData.wand;
+    const oldTip = pedestal.userData.tip;
+    if (old) pedestal.remove(old);
+    if (oldTip) pedestal.remove(oldTip);
+    wandGlb.position.set(0, 1.22, 0);
+    wandGlb.rotation.set(0.2, 0.4, 1.15);
+    wandGlb.scale.setScalar(1.2);
+    pedestal.add(wandGlb);
+    pedestal.userData.wand = wandGlb;
+    pedestal.userData.tip = assets.findNamed(wandGlb, "wandTip") || wandGlb;
+  }
+
+  const snitch = assets.cloneScene(HP_GLB.goldenSnitch);
+  if (snitch) {
+    snitch.position.set(3.4, 1.55, 12.1);
+    snitch.scale.setScalar(2.4);
+    group.add(snitch);
+  }
 }
 
 function createFeatherProp() {
@@ -194,14 +229,15 @@ export function buildDiagonLevel(game) {
     range: 2.8,
   });
 
-  // Wand pedestal
+  // Wand pedestal (display only — Ollivander gives the wand after you speak to him)
   const pedestal = createWandPedestal(game.textures);
   pedestal.position.set(-1.6, 0, 13.2);
   group.add(pedestal);
+  placeBlenderProps(game, group, pedestal);
   interactives.push({
     id: "wand",
     root: pedestal,
-    label: "Claim your wand",
+    label: "Speak to Ollivander for your wand",
     range: 2.4,
   });
 
@@ -300,6 +336,9 @@ export function resetDiagonQuest(game) {
   data.leviosaDone = false;
   data.dummiesHit = 0;
   data.ollivanderTalked = false;
+  game.setWandEquipped?.(false);
+  if (data.pedestal?.userData?.wand) data.pedestal.userData.wand.visible = true;
+  if (data.pedestal?.userData?.tip) data.pedestal.userData.tip.visible = true;
   if (data.feather) data.feather.position.y = 0.35;
   const ped = data.pedestal?.userData;
   if (ped?.wand) ped.wand.visible = true;

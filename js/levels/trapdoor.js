@@ -6,6 +6,7 @@ import {
   createFlyingKey,
 } from "../trapdoorProps.js";
 import { mat, mesh, worldOffsetColliders } from "../worldUtils.js";
+import { HP_GLB } from "../assets.js";
 
 export const TRAPDOOR_ORIGIN = new THREE.Vector3(0, 0, 800);
 
@@ -29,11 +30,11 @@ export function buildTrapdoorLevel(game) {
     range: 5.5,
   });
 
-  // Flying keys — one correct (brighter), rest decoys
+  // Flying keys — Blender GLB when preloaded, else procedural; one correct (brighter)
   const keys = [];
   const correctIndex = 3;
   for (let i = 0; i < 8; i += 1) {
-    const key = createFlyingKey();
+    const key = game.assets?.cloneScene(HP_GLB.flyingKey) || createFlyingKey();
     key.position.set((Math.random() - 0.5) * 12, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4);
     const correct = i === correctIndex;
     if (correct) {

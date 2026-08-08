@@ -22,6 +22,12 @@ Procedural
 - Tudor shop architecture, gas lamps, props in js/diagonProps.js
 - Character heroes in js/characters.js
 
+Blender GLB props (original, CC0 for this fan project)
+------------------------------------------------------
+Built headless on Windows via tools/blender/*.py:
+- holly_wand.glb, ollivander_box.glb, flying_key.glb, golden_snitch.glb
+- golden_snitch.glb scaffold drafted with local Ollama qwen3-coder:30b
+
 Audio
 -----
 - Procedural music beds and spell SFX via the Web Audio API
