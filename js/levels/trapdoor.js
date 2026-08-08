@@ -7,6 +7,7 @@ import {
   mesh,
 } from "../worldUtils.js";
 import { createEnemy } from "../combat.js";
+import { HP_GLB } from "../assets.js";
 
 export const TRAPDOOR_ORIGIN = new THREE.Vector3(0, 0, 800);
 
@@ -49,10 +50,18 @@ export function buildTrapdoorLevel(game) {
   group.add(snare);
   interactives.push({ id: "snare", root: snare, label: "Burn the Devil's Snare (Incendio / Lumos)", range: 4 });
 
-  // Flying keys
+  // Flying keys (Blender GLB when preloaded, else brass box fallback)
   const keys = [];
   for (let i = 0; i < 8; i += 1) {
-    const key = mesh(new THREE.BoxGeometry(0.15, 0.08, 0.4), mat(0xd4af37, { metalness: 0.9, roughness: 0.3, emissive: 0x553300, emissiveIntensity: 0.4 }));
+    const key =
+      game.assets?.cloneScene(HP_GLB.flyingKey) ||
+      mesh(
+        new THREE.BoxGeometry(0.15, 0.08, 0.4),
+        mat(0xd4af37, { metalness: 0.9, roughness: 0.3, emissive: 0x553300, emissiveIntensity: 0.4 })
+      );
+    if (key.scale && game.assets?.getCached(HP_GLB.flyingKey)) {
+      key.scale.setScalar(0.85);
+    }
     key.position.set((Math.random() - 0.5) * 10, 1.5 + Math.random() * 2, 0);
     group.add(key);
     keys.push({ mesh: key, phase: Math.random() * Math.PI * 2, caught: false });

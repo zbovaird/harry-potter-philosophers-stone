@@ -116,29 +116,40 @@ export class FxPipeline {
   }
 }
 
+/**
+ * Spell projectiles without per-bolt PointLights.
+ * Adding/removing lights on each cast forces Three.js to recompile every
+ * MeshStandardMaterial (NUM_POINT_LIGHTS changes) and freezes the browser tab.
+ */
 export class SpellBolt {
   constructor(scene) {
     this.scene = scene;
     this.active = [];
+    this._geo = new THREE.SphereGeometry(1, 8, 8);
+    this._mats = new Map();
+    this._tmpHit = new THREE.Vector3();
   }
 
-  spawn({ origin, direction, color, speed = 28, life = 1.6, radius = 0.12, spellId, damage = 0, onHit }) {
-    const geo = new THREE.SphereGeometry(radius, 10, 10);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 2.4,
-      roughness: 0.2,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.95,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
+  _material(color) {
+    const key = color >>> 0;
+    let mat = this._mats.get(key);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      });
+      this._mats.set(key, mat);
+    }
+    return mat;
+  }
+
+  spawn({ origin, direction, color, speed = 34, life = 2.8, radius = 0.12, spellId, damage = 0, onHit }) {
+    const mesh = new THREE.Mesh(this._geo, this._material(color));
+    mesh.scale.setScalar(radius);
     mesh.position.copy(origin);
     this.scene.add(mesh);
-
-    const light = new THREE.PointLight(color, 1.6, 8);
-    mesh.add(light);
 
     this.active.push({
       mesh,
@@ -163,7 +174,9 @@ export class SpellBolt {
       let hitSomething = false;
       for (const target of targets) {
         if (!target.alive || !target.root) continue;
-        const dist = bolt.mesh.position.distanceTo(target.root.position.clone().setY(target.root.position.y + 1));
+        this._tmpHit.copy(target.root.position);
+        this._tmpHit.y += 1;
+        const dist = bolt.mesh.position.distanceTo(this._tmpHit);
         if (dist < (target.hitRadius || 0.8) + bolt.radius) {
           hits.push({ bolt, target });
           hitSomething = true;
@@ -173,8 +186,7 @@ export class SpellBolt {
 
       if (hitSomething || bolt.life <= 0 || bolt.mesh.position.y < -2) {
         this.scene.remove(bolt.mesh);
-        bolt.mesh.geometry.dispose();
-        bolt.mesh.material.dispose();
+        // Shared geo/materials — do not dispose per bolt
         this.active.splice(i, 1);
       }
     }
@@ -184,8 +196,6 @@ export class SpellBolt {
   clear() {
     for (const bolt of this.active) {
       this.scene.remove(bolt.mesh);
-      bolt.mesh.geometry.dispose();
-      bolt.mesh.material.dispose();
     }
     this.active.length = 0;
   }

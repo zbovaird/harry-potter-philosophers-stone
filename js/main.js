@@ -13,11 +13,11 @@ import {
   markLevelComplete,
   isLevelUnlocked,
 } from "./progress.js";
-import { createPlayer, getCharacter } from "./characters.js";
+import { createPlayer, getCharacter, applyHollyWandGlb } from "./characters.js";
 import { setupCharacterSelect } from "./characterSelect.js";
 import { SpellCaster, getSpell, SPELLS, HOTBAR_SIZE } from "./spells.js";
 import { CombatState, applySpellEffect } from "./combat.js";
-import { AssetLibrary } from "./assets.js";
+import { AssetLibrary, HP_GLB } from "./assets.js";
 import { buildDiagonLevel, resetDiagonQuest, updateDiagonLevel, diagonSpawn } from "./levels/diagon.js";
 import { buildHogwartsLevel, resetHogwartsQuest, updateHogwartsLevel, hogwartsSpawn } from "./levels/hogwarts.js";
 import { buildTrollLevel, resetTrollQuest, updateTrollLevel, trollSpawn } from "./levels/troll.js";
@@ -124,10 +124,10 @@ class Game {
       antialias: true,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.7;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -142,7 +142,7 @@ class Game {
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xffe0b8, 2.6);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(4096, 4096);
+    this.sun.shadow.mapSize.set(1024, 1024);
     this.sun.shadow.camera.left = -35;
     this.sun.shadow.camera.right = 35;
     this.sun.shadow.camera.top = 35;
@@ -178,7 +178,9 @@ class Game {
     this.setLoading(5);
     try {
       await this.textures.load();
-      this.setLoading(45);
+      this.setLoading(35);
+      await this.assets.preload(Object.values(HP_GLB));
+      this.setLoading(55);
       await this.loadHdrEnvironment();
       this.setLoading(85);
     } catch (err) {
@@ -251,11 +253,19 @@ class Game {
       this.scene.remove(this.player.root);
     }
     this.player = createPlayer(id);
+    applyHollyWandGlb(this.player, this.assets);
     this.scene.add(this.player.root);
     const stats = this.player.stats;
     this.combat = new CombatState(stats);
     this.caster = new SpellCaster(this.audio);
+    this.hasWand = false;
+    this.setWandEquipped(false);
     this.ui.playerName.textContent = this.player.name;
+  }
+
+  setWandEquipped(equipped) {
+    this.hasWand = Boolean(equipped);
+    if (this.player?.wand) this.player.wand.visible = this.hasWand;
   }
 
   showLevelSelect() {
@@ -349,6 +359,15 @@ class Game {
     };
     resets[levelId]?.(this);
 
+    // Wand comes from Ollivanders first; later levels start with it equipped.
+    if (levelId === "diagon") {
+      this.setWandEquipped(false);
+      const pedestalWand = this.levelData.diagon?.pedestal?.userData?.wand;
+      if (pedestalWand) pedestalWand.visible = true;
+    } else {
+      this.setWandEquipped(true);
+    }
+
     const spawns = {
       diagon: diagonSpawn,
       hogwarts: hogwartsSpawn,
@@ -390,10 +409,11 @@ class Game {
       slot.className = "spell-slot";
       slot.dataset.index = String(i);
       const color = `#${spell.color.toString(16).padStart(6, "0")}`;
+      const label = spell.id === "leviosa" ? "W. Leviosa" : spell.name.split(" ")[0];
       slot.innerHTML = `
         <span class="key">${(i + 1) % 10}</span>
         <span class="swatch" style="background:${color};color:${color}"></span>
-        <span>${spell.name.split(" ")[0]}</span>
+        <span>${label}</span>
       `;
       slot.addEventListener("click", () => {
         this.caster.selectIndex(i);
@@ -402,9 +422,8 @@ class Game {
       bar.appendChild(slot);
     }
 
-    // Extra utility row note in status — full book via wheel beyond 10? Plan says full list.
-    // Expose remaining spells by cycling through ALL spells with Q/wheel beyond hotbar:
-    this.fullSpellIndex = 0;
+    // Preserve cycle position when rebuilding after R swaps a slot.
+    if (this.fullSpellIndex == null) this.fullSpellIndex = 0;
   }
 
   refreshHotbarUi() {
@@ -422,10 +441,9 @@ class Game {
     const data = this.levelData[this.currentLevel];
     const objectives = {
       diagon: () => {
-        if (!data.ollivanderTalked) return "Talk to Ollivander.";
-        if (!data.wandClaimed) return "Claim your wand from the pedestal.";
-        if (data.dummiesHit < 3) return `Hit the training dummies (${data.dummiesHit}/3) — press R to cycle the full spell book.`;
-        if (!data.leviosaDone) return "Select Wingardium Leviosa (R to cycle) and levitate the feather.";
+        if (!data.wandClaimed) return "Talk to Ollivander to receive your wand.";
+        if (data.dummiesHit < 3) return `Hit the training dummies (${data.dummiesHit}/3) — click to cast.`;
+        if (!data.leviosaDone) return "Select Wingardium Leviosa (3), then press E near the feather (or click to cast).";
         return "Reach the gate at the far end of the alley.";
       },
       hogwarts: () => {
@@ -503,9 +521,20 @@ class Game {
     const data = this.levelData[this.currentLevel];
     let label = near.label;
     let enabled = true;
-    if (this.currentLevel === "diagon" && near.id === "exit") {
-      enabled = data.wandClaimed && data.dummiesHit >= 3 && data.leviosaDone;
-      if (!enabled) label = "Complete Ollivander's trials first";
+    if (this.currentLevel === "diagon") {
+      if (near.id === "exit") {
+        enabled = data.wandClaimed && data.dummiesHit >= 3 && data.leviosaDone;
+        if (!enabled) label = "Complete Ollivander's trials first";
+      } else if (near.id === "ollivander") {
+        label = data.wandClaimed ? "Speak with Ollivander" : "Talk to Ollivander (receive wand)";
+      } else if (near.id === "wand") {
+        // Wand is given by Ollivander — pedestal is display only.
+        enabled = false;
+        label = data.wandClaimed ? "Your wand has chosen you" : "Speak to Ollivander for your wand";
+      } else if (near.id === "feather" && !data.wandClaimed) {
+        enabled = false;
+        label = "Get your wand from Ollivander first";
+      }
     }
     if (this.currentLevel === "hogwarts" && near.id === "exit") {
       enabled = data.sorted;
@@ -541,18 +570,30 @@ class Game {
     if (this.currentLevel === "diagon") {
       if (near.id === "ollivander") {
         data.ollivanderTalked = true;
-        this.showMessage("Ollivander: \"The wand chooses the wizard… claim yours, then practice.\"");
-      } else if (near.id === "wand") {
-        data.wandClaimed = true;
-        data.lumosDone = true;
-        this.showMessage("The wand warms in your hand. Spells answer your call.");
+        if (!data.wandClaimed) {
+          data.wandClaimed = true;
+          data.lumosDone = true;
+          this.setWandEquipped(true);
+          const pedestalWand = data.pedestal?.userData?.wand;
+          if (pedestalWand) pedestalWand.visible = false;
+          if (data.pedestal?.userData?.tip) data.pedestal.userData.tip.visible = false;
+          this.showMessage(
+            'Ollivander: "Curious… holly and phoenix feather. It chooses you."\nYour wand is yours — practice in the alley.'
+          );
+        } else {
+          this.showMessage('Ollivander: "Go on — the wand is eager to learn with you."');
+        }
       } else if (near.id === "feather") {
+        if (!data.wandClaimed) {
+          this.showMessage("You need a wand first — speak with Ollivander.", 1.6);
+          return;
+        }
         const spell = this.caster.getSelectedSpell();
         if (spell?.id === "leviosa" || spell?.effect === "levitate") {
           data.leviosaDone = true;
           this.showMessage("Wingardium Leviosa! The feather rises.");
         } else {
-          this.showMessage("Select Wingardium Leviosa and try again.");
+          this.showMessage("Select Wingardium Leviosa (hotbar 3), then try again.");
           return;
         }
       } else if (near.id === "exit" && data.wandClaimed && data.dummiesHit >= 3 && data.leviosaDone) {
@@ -670,6 +711,10 @@ class Game {
 
   castSelectedSpell() {
     if (!this.caster || !this.combat?.alive) return;
+    if (!this.hasWand) {
+      this.showMessage("You need a wand first — talk to Ollivander.", 1.6);
+      return;
+    }
     let spell = this.caster.getSelectedSpell();
 
     // Allow casting any spell from full book via holding Q to open next utility — simplify:
@@ -1116,4 +1161,5 @@ class Game {
   }
 }
 
-new Game();
+const __hpGame = new Game();
+if (typeof globalThis !== "undefined") globalThis.__hpGame = __hpGame;
