@@ -6,6 +6,8 @@ export const HP_GLB = {
   ollivanderBox: "./assets/props/ollivander_box.glb",
   flyingKey: "./assets/props/flying_key.glb",
   goldenSnitch: "./assets/props/golden_snitch.glb",
+  spellImpactRing: "./assets/props/spell_impact_ring.glb",
+  protegoDome: "./assets/props/protego_dome.glb",
 };
 
 /** Playable hero GLBs exported on windows-64gb via tools/blender/build_hp_characters.py */

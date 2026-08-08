@@ -3,6 +3,7 @@ import { Input } from "./input.js";
 import { GameAudio } from "./audio.js";
 import { createEnvMap } from "./materials.js";
 import { FxPipeline, SpellBolt } from "./fx.js";
+import { SpellVfxSystem, getSpellVfxProfile } from "./spellVfx.js";
 import { Atmosphere } from "./atmosphere.js";
 import { TextureLibrary } from "./textures.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
@@ -160,6 +161,7 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
     this.fx = new FxPipeline(this.renderer, this.scene, this.camera);
     this.bolts = new SpellBolt(this.scene);
+    this.spellVfx = new SpellVfxSystem(this.scene, this.assets);
     this.atmosphere = new Atmosphere(this.scene, this.renderer);
 
     this.hemi = new THREE.HemisphereLight(0xffe8d0, 0x3a2a22, 0.65);
@@ -208,6 +210,7 @@ class Game {
         ...Object.values(HP_GLB),
         ...CHARACTERS.map((c) => characterGlbUrl(c.id)),
       ]);
+      await this.spellVfx.preload();
       this.setLoading(55);
       await this.loadHdrEnvironment();
       this.setLoading(85);
@@ -479,6 +482,7 @@ class Game {
     this.cameraPitch = levelId === "diagon" ? 0.18 : 0.28;
     this.combat = new CombatState(this.player.stats);
     this.bolts.clear();
+    this.spellVfx.clear();
 
     this.atmosphere.apply(meta.atmosphere, { sun: this.sun, hemi: this.hemi, fx: this.fx });
     this.audio.playTheme(meta.music);
@@ -664,9 +668,11 @@ class Game {
     this.audio.cast((spell.color & 0xff) / 255);
     this.refreshHotbarUi();
 
-    // Wand tip flash
+    // Wand tip flash + cast burst
     const tip = new THREE.Vector3();
     this.player.wandTip.getWorldPosition(tip);
+    const vfxProfile = getSpellVfxProfile(spell);
+    this.spellVfx.castFlash(tip, spell.color, vfxProfile.castFlash || 1);
 
     _forward.set(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
     const aim = new THREE.Vector3(
@@ -700,17 +706,24 @@ class Game {
         life: spell.life,
         radius: 0.2,
         spellId: spell.id,
+        spell,
         damage: spell.damage * this.combat.damageMul,
       });
-      // Immediate nearby AoE as well
       const enemies = this.getActiveEnemies();
+      let hitAny = false;
       for (const e of enemies) {
         if (!e.alive) continue;
         const world = e.root.getWorldPosition(new THREE.Vector3());
         if (world.distanceTo(this.player.root.position) < (spell.radius || 3)) {
           applySpellEffect(e, spell, this.combat.damageMul);
-          this.onEnemyHit(e, spell);
+          this.onEnemyHit(e, spell, world);
+          hitAny = true;
         }
+      }
+      const blastPos = tip.clone().addScaledVector(aim, 2.2);
+      this.spellVfx.spawnExplosion(blastPos, spell.radius || 3, spell.color);
+      if (!hitAny) {
+        this.spellVfx.spawnImpact(blastPos, spell.color, vfxProfile.impact || "shockwave", 1.4);
       }
       return;
     }
@@ -722,7 +735,9 @@ class Game {
       let bestDot = 0.55;
       for (const e of enemies) {
         if (!e.alive) continue;
-        const to = e.root.getWorldPosition(new THREE.Vector3()).sub(this.player.root.position).normalize();
+        const world = e.root.getWorldPosition(new THREE.Vector3());
+        world.y += e.hitHeight ?? 1.1;
+        const to = world.clone().sub(this.player.root.position).normalize();
         const dot = to.dot(aim);
         if (dot > bestDot) {
           bestDot = dot;
@@ -730,8 +745,14 @@ class Game {
         }
       }
       if (best) {
+        const targetPos = best.root.getWorldPosition(new THREE.Vector3());
+        targetPos.y += best.hitHeight ?? 1.1;
+        this.spellVfx.spawnBeam(tip, targetPos, spell.color, spell.life || 0.35);
         applySpellEffect(best, spell, this.combat.damageMul);
-        this.onEnemyHit(best, spell);
+        this.onEnemyHit(best, spell, targetPos);
+      } else {
+        const missEnd = tip.clone().addScaledVector(aim, 8);
+        this.spellVfx.spawnBeam(tip, missEnd, spell.color, 0.2);
       }
       return;
     }
@@ -767,8 +788,9 @@ class Game {
       color: spell.color,
       speed: spell.speed,
       life: spell.life,
-      radius: 0.22,
+      radius: spell.effect === "patronus" ? 0.28 : 0.18,
       spellId: spell.id,
+      spell,
       damage: spell.damage * this.combat.damageMul,
     });
 
@@ -780,6 +802,7 @@ class Game {
     const now = this.time;
     if (spell.effect === "shield") {
       this.caster.shieldUntil = now + (spell.duration || 2.5);
+      this.spellVfx.showShield(this.player.root, spell.duration || 2.5, spell.color, this.time);
       this.showMessage("Protego!", 1);
     } else if (spell.effect === "heal") {
       this.combat.heal(spell.heal || 25);
@@ -886,9 +909,13 @@ class Game {
     }
   }
 
-  onEnemyHit(enemy, spell) {
+  onEnemyHit(enemy, spell, impactPos = null) {
     this.audio.hit();
     this.fx.addTrauma(0.2);
+    const pos = impactPos || enemy.root.getWorldPosition(new THREE.Vector3());
+    pos.y += enemy.hitHeight ?? 1.1;
+    const profile = getSpellVfxProfile(spell);
+    this.spellVfx.spawnImpact(pos, spell?.color ?? 0xffffff, profile.impact || "spark", 1.1);
     if (!enemy.alive) {
       enemy.root.scale.setScalar(0.01);
       enemy.root.visible = enemy.training ? false : true;
@@ -1122,13 +1149,19 @@ class Game {
     };
     updaters[this.currentLevel]?.(this, delta, this.time);
 
-    const hits = this.bolts.update(delta, this.getActiveEnemies());
-    for (const { bolt, target } of hits) {
+    const { hits, expired } = this.bolts.update(delta, this.getActiveEnemies(), this.time);
+    for (const { bolt, target, hitPos } of hits) {
       const spell = getSpell(bolt.spellId);
       if (spell) {
         applySpellEffect(target, spell, this.combat.damageMul);
-        this.onEnemyHit(target, spell);
+        this.onEnemyHit(target, spell, hitPos);
       }
+    }
+    for (const { bolt, hitPos } of expired) {
+      const spell = getSpell(bolt.spellId);
+      if (spell?.type === "aoe") continue;
+      const profile = getSpellVfxProfile(spell);
+      this.spellVfx.spawnImpact(hitPos, bolt.color, profile.impact || "spark", 0.8);
     }
     this.checkEnvironmentSpellHits();
 
@@ -1160,6 +1193,7 @@ class Game {
     if (this.state === "playing") {
       this.updatePlayer(delta);
       this.updateLevels(delta);
+      this.spellVfx.update(delta, this.time);
 
       this._contextAccum += delta;
       if (this._contextAccum >= CONTEXT_INTERVAL) {
