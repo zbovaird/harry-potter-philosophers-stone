@@ -657,7 +657,11 @@ class Game {
     // Number keys select hotbar; for utilities, cycle with R through extended list
     if (!spell) return;
     if (!this.caster.canCast(spell, this.combat.mana, this.combat.castCooldownMul)) {
-      if (this.combat.mana < spell.mana) this.showMessage("Not enough mana.", 1.2);
+      if ((this.caster.cooldowns[spell.id] || 0) > 0) {
+        this.showMessage("Spell on cooldown.", 0.9);
+      } else if (this.combat.mana < spell.mana) {
+        this.showMessage(`Need ${spell.mana} mana (have ${Math.floor(this.combat.mana)}).`, 1.0);
+      }
       return;
     }
     if (spell.restricted && this.currentLevel !== "quirrell") {
