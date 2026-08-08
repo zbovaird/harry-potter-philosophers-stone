@@ -38,6 +38,9 @@ export const HOTBAR_SIZE = 10;
 /** Mana per second while not casting — keeps bar topping up without needing a full bar. */
 export const MANA_REGEN_PER_SEC = 28;
 
+/** Brief gap between casts (seconds). Mana is the real limiter; this only prevents double-fire glitches. */
+export const GLOBAL_CAST_DELAY = 0.12;
+
 export function getSpell(id) {
   return SPELLS.find((s) => s.id === id);
 }
@@ -51,7 +54,7 @@ export class SpellCaster {
     this.audio = audio;
     this.hotbar = defaultHotbar();
     this.selected = 0;
-    this.cooldowns = {};
+    this.globalCastLock = 0;
     this.shieldUntil = 0;
     this.lumosOn = false;
     this.lumosLight = null;
@@ -72,19 +75,17 @@ export class SpellCaster {
   }
 
   tick(delta) {
-    for (const id of Object.keys(this.cooldowns)) {
-      this.cooldowns[id] = Math.max(0, this.cooldowns[id] - delta);
-    }
+    this.globalCastLock = Math.max(0, this.globalCastLock - delta);
   }
 
-  canCast(spell, mana, castCooldownMul = 1) {
+  canCast(spell, mana) {
     if (!spell) return false;
-    if ((this.cooldowns[spell.id] || 0) > 0) return false;
+    if (this.globalCastLock > 0) return false;
     if (mana < spell.mana) return false;
     return true;
   }
 
-  beginCooldown(spell, castCooldownMul = 1) {
-    this.cooldowns[spell.id] = spell.cooldown * castCooldownMul;
+  beginCastLock(castCooldownMul = 1) {
+    this.globalCastLock = GLOBAL_CAST_DELAY * castCooldownMul;
   }
 }

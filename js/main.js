@@ -538,8 +538,7 @@ class Game {
     slots.forEach((slot, i) => {
       slot.classList.toggle("active", i === this.caster.selected);
       const spell = getSpell(this.caster.hotbar[i]);
-      const cd = this.caster.cooldowns[spell.id] || 0;
-      slot.classList.toggle("on-cooldown", cd > 0.05);
+      slot.classList.toggle("on-cooldown", this.caster.globalCastLock > 0.05);
     });
   }
 
@@ -656,10 +655,8 @@ class Game {
     // Allow casting any spell from full book via holding Q to open next utility — simplify:
     // Number keys select hotbar; for utilities, cycle with R through extended list
     if (!spell) return;
-    if (!this.caster.canCast(spell, this.combat.mana, this.combat.castCooldownMul)) {
-      if ((this.caster.cooldowns[spell.id] || 0) > 0) {
-        this.showMessage("Spell on cooldown.", 0.9);
-      } else if (this.combat.mana < spell.mana) {
+    if (!this.caster.canCast(spell, this.combat.mana)) {
+      if (this.combat.mana < spell.mana) {
         this.showMessage(`Need ${spell.mana} mana (have ${Math.floor(this.combat.mana)}).`, 1.0);
       }
       return;
@@ -670,7 +667,7 @@ class Game {
     }
 
     if (!this.combat.spendMana(spell.mana)) return;
-    this.caster.beginCooldown(spell, this.combat.castCooldownMul);
+    this.caster.beginCastLock(this.combat.castCooldownMul);
     this.audio.cast(spell);
     this.refreshHotbarUi();
 
@@ -979,22 +976,14 @@ class Game {
 
     const spell = this.caster?.getSelectedSpell();
     const status = spell
-      ? `Spell: ${spell.name} · Mana ${spell.mana} · CD ${(this.caster.cooldowns[spell.id] || 0).toFixed(1)}s`
+      ? `Spell: ${spell.name} · Mana ${spell.mana}`
       : "Spells ready";
     if (status !== this._lastStatus) {
       this._lastStatus = status;
       this.ui.status.textContent = status;
     }
 
-    // Cooldown rings need occasional hotbar refresh
-    let anyCd = false;
-    for (const id of this.caster.hotbar) {
-      if ((this.caster.cooldowns[id] || 0) > 0) {
-        anyCd = true;
-        break;
-      }
-    }
-    if (anyCd) this._hotbarDirty = true;
+    if (this.caster.globalCastLock > 0) this._hotbarDirty = true;
   }
 
   resolveCollisions(pos) {
