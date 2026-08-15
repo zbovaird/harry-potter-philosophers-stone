@@ -191,6 +191,48 @@ def build_ollivander_box() -> bpy.types.Object:
     return root
 
 
+def build_cauldron() -> bpy.types.Object:
+    clear_scene()
+    iron = new_mat("CauldronIron", (0.18, 0.2, 0.22, 1), roughness=0.45, metallic=0.85)
+    brew = new_mat(
+        "CauldronBrew",
+        (0.2, 0.65, 0.35, 1),
+        roughness=0.2,
+        emission=(0.3, 0.9, 0.5, 1),
+        emission_strength=0.8,
+    )
+    root = bpy.data.objects.new("cauldron", None)
+    bpy.context.collection.objects.link(root)
+    body = add_uv_sphere("body", 0.28, (0, 0.22, 0), parent=root, mat=iron, segments=20, rings=12)
+    body.scale = (1.0, 0.75, 1.0)
+    lip = add_torus("lip", 0.26, 0.035, (0, 0.38, 0), parent=root, mat=iron)
+    legs = []
+    for i, ang in enumerate((0, 2.09, 4.18)):
+        x = math.cos(ang) * 0.18
+        z = math.sin(ang) * 0.18
+        leg = add_cylinder(f"leg_{i}", 0.02, 0.025, 0.12, (x, 0.06, z), parent=root, mat=iron, vertices=10)
+        legs.append(leg)
+    liquid = add_uv_sphere("brew", 0.22, (0, 0.36, 0), parent=root, mat=brew, segments=16, rings=10)
+    liquid.scale = (1.0, 0.35, 1.0)
+    export_glb(OUT_PROPS / "cauldron.glb", [root, body, lip, liquid, *legs])
+    return root
+
+
+def build_house_banner() -> bpy.types.Object:
+    clear_scene()
+    cloth = new_mat("BannerCloth", (0.45, 0.12, 0.12, 1), roughness=0.85)
+    gold = new_mat("BannerGold", (0.78, 0.62, 0.2, 1), roughness=0.35, metallic=0.85)
+    rod = new_mat("BannerRod", (0.35, 0.28, 0.18, 1), roughness=0.5, metallic=0.4)
+    root = bpy.data.objects.new("house_banner", None)
+    bpy.context.collection.objects.link(root)
+    pole = add_cylinder("pole", 0.018, 0.018, 1.4, (0, 0.7, 0), parent=root, mat=rod, vertices=12)
+    banner = add_cube("banner", 1.0, (0, 0.95, 0.02), parent=root, mat=cloth, scale=(0.55, 0.75, 0.02))
+    crest = add_cube("crest", 1.0, (0, 0.95, 0.05), parent=root, mat=gold, scale=(0.22, 0.28, 0.03))
+    tassel = add_cylinder("tassel", 0.01, 0.01, 0.12, (0, 0.35, 0.04), parent=root, mat=gold, vertices=8)
+    export_glb(OUT_PROPS / "house_banner.glb", [root, pole, banner, crest, tassel])
+    return root
+
+
 def build_flying_key() -> bpy.types.Object:
     clear_scene()
     brass = new_mat("KeyBrass", (0.78, 0.62, 0.22, 1), roughness=0.35, metallic=0.9)
@@ -223,6 +265,8 @@ def main() -> int:
     print(f"ROOT={ROOT}")
     build_holly_wand()
     build_ollivander_box()
+    build_cauldron()
+    build_house_banner()
     build_flying_key()
     print("All Harry Potter Blender props exported.")
     return 0

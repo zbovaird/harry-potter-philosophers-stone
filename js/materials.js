@@ -120,6 +120,7 @@ export function mat(color, options = {}) {
     flatShading: options.flatShading ?? false,
     transparent: options.transparent ?? false,
     opacity: options.opacity ?? 1,
+    side: options.side ?? THREE.FrontSide,
   });
 }
 

@@ -3,6 +3,9 @@
  * Each handler may implement: objective, canExit, tryInteract, filterInteractive, onUtilitySpell.
  */
 
+import * as THREE from "three";
+import { CHAMBER_ORIGIN, openChamberHatch } from "./levels/chamber.js";
+
 export const QUESTS = {
   diagon: {
     objective(data) {
@@ -293,6 +296,367 @@ export const QUESTS = {
       }
       if (near.id === "exit" && this.canExit(data)) {
         data.stoneClaimed = true;
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  burrow: {
+    objective(data) {
+      if (!data.mollyTalked) return "Talk to Molly at the Burrow.";
+      if (!data.dobbyWarned) return "Confront Dobby — he is trying to stop you.";
+      if (!data.knockturnVisited) return "Search Knockturn Alley for dark-shop clues.";
+      return "Leave through the far gate toward Hogwarts.";
+    },
+    canExit(data) {
+      return data.mollyTalked && data.dobbyWarned && data.knockturnVisited;
+    },
+    exitBlockedLabel: "Finish the Burrow and Knockturn beats first",
+    tryInteract(game, near, data) {
+      if (near.id === "molly") {
+        data.mollyTalked = true;
+        game.showMessage('Molly: "You\'re staying the rest of the summer, and that\'s that."');
+        return "handled";
+      }
+      if (near.id === "dobby") {
+        data.dobbyWarned = true;
+        game.showMessage('Dobby: "Harry Potter must not go back to Hogwarts!"');
+        return "handled";
+      }
+      if (near.id === "shop") {
+        data.knockturnVisited = true;
+        game.showMessage("Borgin & Burkes smells of dust, curses, and old secrets.");
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  anglia: {
+    objective(data) {
+      if (!data.ronTalked) return "Talk to Ron about missing the train.";
+      if (!data.boarded) return "Board the flying Ford Anglia.";
+      if (!data.landed) return "Steer the car — dodge the trees until Hogwarts appears.";
+      return "Land at the Hogwarts gates.";
+    },
+    canExit(data) {
+      return data.landed;
+    },
+    exitBlockedLabel: "You still have to fly there",
+    tryInteract(game, near, data) {
+      if (near.id === "ron") {
+        data.ronTalked = true;
+        game.showMessage('Ron: "Dad\'s car can fly. Don\'t tell Mum."');
+        return "handled";
+      }
+      if (near.id === "car") {
+        data.boarded = true;
+        game.flyingVehicle = true;
+        game.showMessage("The Ford Anglia lifts off. WASD to drift — avoid the trees!");
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  willow: {
+    objective(data) {
+      if (!data.carFreed) return "Accio (8) the Ford from the Whomping Willow — Protego (4) against branches.";
+      return "Get inside Hogwarts before Filch finds you.";
+    },
+    canExit(data) {
+      return data.carFreed;
+    },
+    exitBlockedLabel: "Free the car from the Willow first",
+    onUtilitySpell(game, spell, data) {
+      if (spell.effect === "pull" && !data.carFreed) {
+        data.carFreed = true;
+        if (data.car) {
+          data.car.position.set(-6, 0, -8);
+          data.car.rotation.set(0, 0.4, 0);
+        }
+        game.showMessage("Accio! The Ford drops free of the Willow.");
+        return true;
+      }
+      return false;
+    },
+    tryInteract(game, near, data) {
+      if (near.id === "car") {
+        if (!data.carFreed) {
+          data.carFreed = true;
+          if (data.car) {
+            data.car.position.set(-6, 0, -8);
+            data.car.rotation.set(0, 0.4, 0);
+          }
+          game.showMessage("You wrench the car free as the Willow thrashes.");
+          return "handled";
+        }
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  dueling: {
+    objective(data) {
+      if (!data.lessonHeard) return "Listen to Lockhart at the Dueling Club.";
+      if (data.malfoy.alive) return "Duel Malfoy! Expelliarmus (1) / Stupefy (2) — Protego (4) on his wind-up.";
+      return "Leave the club before Lockhart takes credit.";
+    },
+    canExit(data) {
+      return data.lessonHeard && !data.malfoy.alive;
+    },
+    exitBlockedLabel(data) {
+      return data.lessonHeard ? "Win the duel first" : "Hear the lesson first";
+    },
+    tryInteract(game, near, data) {
+      if (near.id === "lockhart") {
+        data.lessonHeard = true;
+        data.snake.visible = true;
+        data.snakeShown = true;
+        game.showMessage('Lockhart: "I\'ll have to stun him separately!" Malfoy draws a snake.');
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  polyjuice: {
+    objective(data) {
+      if (!data.planned) return "Meet Hermione to plan Polyjuice.";
+      if (!data.boomslang || !data.lacewing || !data.hair) {
+        const n = [data.boomslang, data.lacewing, data.hair].filter(Boolean).length;
+        return `Gather potion ingredients (${n}/3).`;
+      }
+      if (!data.brewed) return "Brew the potion at the cauldron.";
+      if (!data.overheard) return "Drink, then eavesdrop on Malfoy in Slytherin colours.";
+      return "Slip back out before the potion wears off.";
+    },
+    canExit(data) {
+      return data.overheard;
+    },
+    exitBlockedLabel: "Finish the Polyjuice plot first",
+    filterInteractive(item, data) {
+      if (item.id === "boomslang" && data.boomslang) return false;
+      if (item.id === "lacewing" && data.lacewing) return false;
+      if (item.id === "hair" && data.hair) return false;
+      return true;
+    },
+    tryInteract(game, near, data) {
+      if (near.id === "hermione") {
+        data.planned = true;
+        game.showMessage('Hermione: "We need boomslang, lacewing, and a hair. Then we brew."');
+        return "handled";
+      }
+      if (near.id === "boomslang" || near.id === "lacewing" || near.id === "hair") {
+        if (!data.planned) {
+          game.showMessage("Ask Hermione what you need first.");
+          return "handled";
+        }
+        data[near.id] = true;
+        near.root.visible = false;
+        game.showMessage("Ingredient pocketed.");
+        return "handled";
+      }
+      if (near.id === "cauldron") {
+        if (!data.boomslang || !data.lacewing || !data.hair) {
+          game.showMessage("The cauldron still needs all three ingredients.");
+          return "handled";
+        }
+        data.brewed = true;
+        data.disguised = true;
+        game.cloaked = true;
+        game.showMessage("The potion tastes of dirty socks. You look like a Slytherin.");
+        return "handled";
+      }
+      if (near.id === "malfoy") {
+        if (!data.disguised) {
+          game.showMessage("He'll never talk if he recognises you. Drink the potion first.");
+          return "handled";
+        }
+        data.overheard = true;
+        game.showMessage('Malfoy: "The Heir of Slytherin? It isn\'t me — more\'s the pity."');
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  mandrakes: {
+    objective(data) {
+      if (!data.lesson) return "Speak with Professor Sprout.";
+      if (data.potted < 4) return `Pot the screaming Mandrakes (${data.potted}/4) — E or Leviosa (5).`;
+      if (!data.revived) return "Use the draught to revive the petrified student.";
+      return "Leave the greenhouse.";
+    },
+    canExit(data) {
+      return data.revived;
+    },
+    exitBlockedLabel: "Finish Herbology first",
+    onUtilitySpell(game, spell, data) {
+      if (spell.effect !== "levitate") return false;
+      const near = data.interactives.find((i) => i.id === "mandrake" && !data.pottedFlags[i.index]);
+      if (!near) return false;
+      const world = near.root.getWorldPosition(new THREE.Vector3());
+      if (game.player.root.position.distanceTo(world) > 4.5) return false;
+      data.pottedFlags[near.index] = true;
+      data.potted += 1;
+      near.root.scale.setScalar(0.7);
+      game.showMessage("Wingardium Leviosa — the Mandrake goes in the pot!");
+      return true;
+    },
+    tryInteract(game, near, data) {
+      if (near.id === "sprout") {
+        data.lesson = true;
+        game.showMessage('Sprout: "Earmuffs on! Mandrakes, into their new pots."');
+        return "handled";
+      }
+      if (near.id === "mandrake") {
+        if (!data.lesson) {
+          game.showMessage("Wait for Sprout's instructions.");
+          return "handled";
+        }
+        if (!data.pottedFlags[near.index]) {
+          data.pottedFlags[near.index] = true;
+          data.potted += 1;
+          near.root.scale.setScalar(0.7);
+          game.showMessage("The Mandrake screams — and settles.");
+        }
+        return "handled";
+      }
+      if (near.id === "petrified") {
+        if (data.potted < 4) {
+          game.showMessage("You still need a full Mandrake draught.");
+          return "handled";
+        }
+        data.revived = true;
+        if (data.justin) {
+          data.justin.rotation.x = 0;
+          data.justin.position.y = 0;
+        }
+        game.showMessage("Colour returns to their face. The petrification lifts.");
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  spiders: {
+    objective(data) {
+      if (data.websBurned < 2) return `Burn the spider webs with Incendio (7) (${data.websBurned}/2).`;
+      if (!data.aragogTalked) return "Reach Aragog. Patronus (0) scares spiders; Protego (4) blocks bites.";
+      return "Escape in the Ford Anglia.";
+    },
+    canExit(data) {
+      return data.aragogTalked && data.websBurned >= 2;
+    },
+    exitBlockedLabel: "Speak with Aragog after clearing the webs",
+    tryInteract(game, near, data) {
+      if (near.id === "web") {
+        game.showMessage("Cast Incendio (7) at the webs.");
+        return "handled";
+      }
+      if (near.id === "aragog") {
+        data.aragogTalked = true;
+        game.showMessage('Aragog: "The beast is not of our kind… Hagrid is innocent."');
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
+        game.completeLevel();
+        return "complete";
+      }
+      return null;
+    },
+  },
+
+  chamber: {
+    objective(data) {
+      if (!data.myrtleTalked) return "Speak with Moaning Myrtle.";
+      if (!data.diaryTaken) return "Accio (8) Tom Riddle's diary.";
+      if (!data.hatchOpen) return "Cast Alohomora (9) on the ouroboros hatch.";
+      if (!data.descended) return "Step into the serpent's mouth and drop into the Chamber.";
+      if (data.basilisk.alive) return "Face the basilisk below! Protego (4) on its wind-up.";
+      if (!data.fawkesHelped) return "Take Fawkes' help — he will carry you back up.";
+      return "Leave through Myrtle's bathroom door.";
+    },
+    canExit(data) {
+      return data.descended && !data.basilisk.alive && data.fawkesHelped;
+    },
+    exitBlockedLabel: "Finish the Chamber below, then return with Fawkes",
+    onUtilitySpell(game, spell, data) {
+      if (spell.effect === "pull" && !data.diaryTaken) {
+        data.diaryTaken = true;
+        if (data.diary) data.diary.visible = false;
+        game.showMessage("Accio! The diary slaps into your hand — ink still wet.");
+        return true;
+      }
+      if (spell.effect === "unlock" && data.diaryTaken && !data.hatchOpen) {
+        openChamberHatch(game);
+        return true;
+      }
+      return false;
+    },
+    tryInteract(game, near, data) {
+      if (near.id === "myrtle") {
+        data.myrtleTalked = true;
+        game.showMessage('Myrtle: "I died here. The voice came from the taps — and that snake in the floor."');
+        return "handled";
+      }
+      if (near.id === "diary") {
+        data.diaryTaken = true;
+        near.root.visible = false;
+        game.showMessage("Tom Riddle's diary is cold, and somehow listening.");
+        return "handled";
+      }
+      if (near.id === "hatch") {
+        if (!data.diaryTaken) {
+          game.showMessage("The ouroboros stays shut until the diary is yours.");
+          return "handled";
+        }
+        if (!data.hatchOpen) {
+          game.showMessage("Alohomora (9) — unlock the serpent hatch.");
+          return "handled";
+        }
+        game.showMessage("The mouth is open. Step in and drop.");
+        return "handled";
+      }
+      if (near.id === "fawkes") {
+        if (data.basilisk.alive) {
+          game.showMessage("Fawkes circles, waiting for the serpent to fall.");
+          return "handled";
+        }
+        data.fawkesHelped = true;
+        game.player.root.position.copy(CHAMBER_ORIGIN).add(new THREE.Vector3(0, 0, -7));
+        game.velocityY = 0;
+        game.showMessage("Fawkes bears you up the pipe. Phoenix tears and a fang — the diary can die.");
+        return "handled";
+      }
+      if (near.id === "exit" && this.canExit(data)) {
         game.completeLevel();
         return "complete";
       }

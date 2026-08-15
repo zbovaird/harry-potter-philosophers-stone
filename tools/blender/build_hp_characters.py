@@ -502,6 +502,9 @@ def build_character(char: dict) -> None:
         add_capsule("thigh", 0.075, 0.28, (0, -0.28, 0), parent=leg, mat=pant_mat, vertices=12)
         add_cube("boot", (0, -0.58, 0.04), (0.12, 0.1, 0.2), parent=leg, mat=boot_mat)
 
+    root.rotation_euler = (math.pi / 2, 0.0, 0.0)
+    bpy.context.view_layer.update()
+
     shade_smooth_all()
     export_glb(OUT_CHARS / f"{char['id']}.glb")
 

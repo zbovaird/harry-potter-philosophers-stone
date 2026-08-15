@@ -2,13 +2,15 @@ import * as THREE from "three";
 import { mat, mesh, makeNoiseTexture, makeWoodTexture, makeStoneTexture } from "./materials.js";
 
 export function addGround(group, colliders, { size = 60, y = 0, color = 0x5a5045, texture = null, level }) {
+  const map = texture && texture.isTexture ? texture : null;
   const geo = new THREE.PlaneGeometry(size, size);
   const material = mat(color, {
     roughness: 0.92,
-    map: texture,
+    map,
   });
-  if (texture) {
-    texture.repeat.set(size / 8, size / 8);
+  if (map) {
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(size / 8, size / 8);
   }
   const ground = mesh(geo, material, false, true);
   ground.rotation.x = -Math.PI / 2;
@@ -20,6 +22,29 @@ export function addGround(group, colliders, { size = 60, y = 0, color = 0x5a5045
     maxX: half,
     minZ: -half,
     maxZ: half,
+    minY: y - 0.5,
+    maxY: y,
+    ground: true,
+    level,
+    active: true,
+  });
+  return ground;
+}
+
+/** Rectangular floor piece — used to leave holes (hatches, trapdoors). */
+export function addGroundPatch(group, colliders, { x = 0, z = 0, w = 8, d = 8, y = 0, color = 0x5a5045, texture = null, level }) {
+  const map = texture && texture.isTexture ? texture : null;
+  const geo = new THREE.PlaneGeometry(w, d);
+  const material = mat(color, { roughness: 0.9, map });
+  const ground = mesh(geo, material, false, true);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.set(x, y, z);
+  group.add(ground);
+  colliders.push({
+    minX: x - w / 2,
+    maxX: x + w / 2,
+    minZ: z - d / 2,
+    maxZ: z + d / 2,
     minY: y - 0.5,
     maxY: y,
     ground: true,
@@ -58,10 +83,21 @@ export function worldOffsetColliders(colliders, origin) {
 }
 
 export function addWallBox(group, colliders, { x, y, z, w, h, d, color = 0x6a6055, level, map = null }) {
-  const wall = mesh(new THREE.BoxGeometry(w, h, d), mat(color, { roughness: 0.85, map }));
+  const tex = map && map.isTexture ? map : null;
+  const wall = mesh(new THREE.BoxGeometry(w, h, d), mat(color, { roughness: 0.85, map: tex }));
   wall.position.set(x, y, z);
   group.add(wall);
-  addBoxCollider(colliders, wall, level);
+  colliders.push({
+    minX: x - w / 2,
+    maxX: x + w / 2,
+    minY: y - h / 2,
+    maxY: y + h / 2,
+    minZ: z - d / 2,
+    maxZ: z + d / 2,
+    ground: false,
+    level,
+    active: true,
+  });
   return wall;
 }
 

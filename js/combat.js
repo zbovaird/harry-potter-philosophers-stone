@@ -1,3 +1,5 @@
+import { MANA_REGEN_PER_SEC } from "./spells.js";
+
 export class CombatState {
   constructor(stats) {
     this.maxHp = stats.maxHp;
@@ -13,7 +15,7 @@ export class CombatState {
   }
 
   regenMana(delta) {
-    this.mana = Math.min(this.maxMana, this.mana + 12 * delta);
+    this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN_PER_SEC * delta);
   }
 
   spendMana(amount) {

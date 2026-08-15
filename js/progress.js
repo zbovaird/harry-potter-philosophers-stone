@@ -1,55 +1,39 @@
 const STORAGE_KEY = "hpPsProgress";
 
-export const LEVELS = [
+export const CAMPAIGNS = [
   {
-    id: "diagon",
-    index: 1,
-    title: "Diagon Alley & Ollivanders",
-    subtitle: "Claim your wand",
-    atmosphere: "diagon",
-    music: "diagon",
+    id: "ps",
+    title: "The Philosopher's Stone",
+    blurb: "Follow the events of the first film.",
+    levels: [
+      { id: "diagon", index: 1, title: "Diagon Alley & Ollivanders", subtitle: "Claim your wand", atmosphere: "diagon", music: "diagon" },
+      { id: "hogwarts", index: 2, title: "Hogwarts Arrival & Sorting", subtitle: "Welcome to Hogwarts", atmosphere: "greatHall", music: "greatHall" },
+      { id: "troll", index: 3, title: "Troll in the Bathroom", subtitle: "Save Hermione", atmosphere: "bathroom", music: "bathroom" },
+      { id: "forest", index: 4, title: "Forbidden Forest", subtitle: "Into the trees", atmosphere: "forest", music: "forest" },
+      { id: "trapdoor", index: 5, title: "Through the Trapdoor", subtitle: "The trials below", atmosphere: "dungeon", music: "dungeon" },
+      { id: "quirrell", index: 6, title: "Mirror of Erised / Quirrell", subtitle: "The final confrontation", atmosphere: "quirrell", music: "quirrell" },
+    ],
   },
   {
-    id: "hogwarts",
-    index: 2,
-    title: "Hogwarts Arrival & Sorting",
-    subtitle: "Welcome to Hogwarts",
-    atmosphere: "greatHall",
-    music: "greatHall",
-  },
-  {
-    id: "troll",
-    index: 3,
-    title: "Troll in the Bathroom",
-    subtitle: "Save Hermione",
-    atmosphere: "bathroom",
-    music: "bathroom",
-  },
-  {
-    id: "forest",
-    index: 4,
-    title: "Forbidden Forest",
-    subtitle: "Into the trees",
-    atmosphere: "forest",
-    music: "forest",
-  },
-  {
-    id: "trapdoor",
-    index: 5,
-    title: "Through the Trapdoor",
-    subtitle: "The trials below",
-    atmosphere: "dungeon",
-    music: "dungeon",
-  },
-  {
-    id: "quirrell",
-    index: 6,
-    title: "Mirror of Erised / Quirrell",
-    subtitle: "The final confrontation",
-    atmosphere: "quirrell",
-    music: "quirrell",
+    id: "cos",
+    title: "The Chamber of Secrets",
+    blurb: "The second film — eight chapters, including extras.",
+    levels: [
+      { id: "burrow", index: 1, title: "The Burrow & Knockturn Alley", subtitle: "Dobby's warning", atmosphere: "burrow", music: "diagon" },
+      { id: "anglia", index: 2, title: "The Flying Ford Anglia", subtitle: "Missed the train", atmosphere: "flight", music: "forest" },
+      { id: "willow", index: 3, title: "The Whomping Willow", subtitle: "Crash landing", atmosphere: "willow", music: "forest" },
+      { id: "dueling", index: 4, title: "The Dueling Club", subtitle: "Expelliarmus", atmosphere: "dueling", music: "greatHall" },
+      { id: "polyjuice", index: 5, title: "Polyjuice & Slytherin", subtitle: "Who is the heir?", atmosphere: "slytherin", music: "dungeon" },
+      { id: "mandrakes", index: 6, title: "Mandrakes in Greenhouse Three", subtitle: "Petrification", atmosphere: "greenhouse", music: "greatHall" },
+      { id: "spiders", index: 7, title: "Follow the Spiders", subtitle: "Aragog", atmosphere: "darkForest", music: "forest" },
+      { id: "chamber", index: 8, title: "The Chamber of Secrets", subtitle: "The basilisk", atmosphere: "chamber", music: "quirrell" },
+    ],
   },
 ];
+
+export const LEVELS = CAMPAIGNS.flatMap((campaign) =>
+  campaign.levels.map((level) => ({ ...level, campaign: campaign.id, campaignTitle: campaign.title }))
+);
 
 export function loadProgress() {
   const defaults = {
