@@ -500,8 +500,36 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: min(420px, 90vw);
+  width: min(480px, 90vw);
+  max-height: min(48vh, 420px);
+  overflow-y: auto;
   margin: 8px 0 12px;
+  padding-right: 6px;
+}
+
+.campaign-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.campaign-tab {
+  padding: 10px 16px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 3px;
+  background: rgba(24, 20, 16, 0.9);
+  color: #e8dcc8;
+  font-family: Cinzel, serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.campaign-tab.active {
+  border-color: #d4af37;
+  background: rgba(70, 52, 24, 0.98);
+  color: #f8ecd0;
 }
 
 .level-actions button,

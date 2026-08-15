@@ -80,7 +80,6 @@ export function tickBoss(game, enemy, origin, delta, time, opts = {}) {
     _to.normalize();
     enemy.root.position.addScaledVector(_to, enemy.speed * speedMul * delta);
     enemy.root.rotation.y = Math.atan2(_to.x, _to.z);
-    enemy.root.position.y = Math.sin(time * 4) * 0.05;
   } else if (dist <= meleeRange && enemy.attackCd <= 0 && game.combat?.alive) {
     enemy.winding = true;
     enemy.windup = windupTime;

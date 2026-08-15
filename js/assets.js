@@ -11,6 +11,12 @@ export const HP_GLB = {
   patronusStag: "./assets/props/patronus_stag.glb",
   cauldron: "./assets/props/cauldron.glb",
   houseBanner: "./assets/props/house_banner.glb",
+  fordAnglia: "./assets/props/ford_anglia.glb",
+  whompingWillow: "./assets/props/whomping_willow.glb",
+  tomRiddleDiary: "./assets/props/tom_riddle_diary.glb",
+  acromantula: "./assets/props/acromantula.glb",
+  basilisk: "./assets/props/basilisk.glb",
+  mandrake: "./assets/props/mandrake.glb",
 };
 
 /** Playable hero GLBs exported on windows-64gb via tools/blender/build_hp_characters.py */
@@ -79,27 +85,33 @@ export class AssetLibrary {
   }
 
   /** Stand Blender character up and scale to target height (fixes sideways GLBs). */
-  normalizeStandingModel(root, targetHeight = 1.7) {
+  normalizeStandingModel(root, targetHeight = 1.7, { standUp = true } = {}) {
     root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
     box.getSize(size);
+    if (![size.x, size.y, size.z].every(Number.isFinite) || size.lengthSq() < 1e-8) {
+      return root;
+    }
 
-    if (size.z >= size.y * 0.95 && size.z >= size.x) {
-      root.rotation.x += Math.PI / 2;
-    } else if (size.x >= size.y * 0.95 && size.x >= size.z) {
-      root.rotation.z += -Math.PI / 2;
+    if (standUp) {
+      if (size.z >= size.y * 0.95 && size.z >= size.x) {
+        root.rotation.x += Math.PI / 2;
+      } else if (size.x >= size.y * 0.95 && size.x >= size.z) {
+        root.rotation.z += -Math.PI / 2;
+      }
     }
 
     root.updateMatrixWorld(true);
     const box2 = new THREE.Box3().setFromObject(root);
     const size2 = box2.getSize(new THREE.Vector3());
     const height = Math.max(size2.y, 0.01);
+    if (!Number.isFinite(height)) return root;
     root.scale.multiplyScalar(targetHeight / height);
     root.updateMatrixWorld(true);
 
     const box3 = new THREE.Box3().setFromObject(root);
-    root.position.y -= box3.min.y;
+    if (Number.isFinite(box3.min.y)) root.position.y -= box3.min.y;
     root.updateMatrixWorld(true);
     return root;
   }

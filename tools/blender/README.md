@@ -26,9 +26,14 @@ Writes:
 | `assets/props/ollivander_box.glb` | Diagon Alley shop prop |
 | `assets/props/flying_key.glb` | Trapdoor flying keys |
 | `assets/props/golden_snitch.glb` | Diagon Quidditch display |
-| `assets/props/spell_impact_ring.glb` | Spell hit burst (Three.js `spellVfx.js`) |
-| `assets/props/protego_dome.glb` | Protego shield bubble |
-| `assets/characters/<id>.glb` | Playable heroes (`harry`, `hermione`, …) |
+| `assets/props/cauldron.glb` | Potion rooms / Polyjuice |
+| `assets/props/house_banner.glb` | Great Hall house banners |
+| `assets/props/ford_anglia.glb` | Flying Ford Anglia (CoS) |
+| `assets/props/whomping_willow.glb` | Whomping Willow (CoS) |
+| `assets/props/tom_riddle_diary.glb` | Chamber diary (CoS) |
+| `assets/props/acromantula.glb` | Forest spiders (CoS) |
+| `assets/props/basilisk.glb` | Chamber boss (CoS) |
+| `assets/props/mandrake.glb` | Greenhouse Three (CoS) |
 
 Character GLBs must keep these object names so the game can animate them:
 
@@ -36,7 +41,7 @@ Character GLBs must keep these object names so the game can animate them:
 
 ## Add a new prop
 
-1. Extend `build_hp_props.py` (or ask the LAN coder model for a bpy snippet).
+1. Extend `build_hp_props.py` or `build_cos_props.py` (or ask the LAN coder model for a bpy snippet).
 2. Re-run `export_all.ps1` on Windows.
 3. Register the URL in `js/assets.js` → `HP_GLB`.
 4. Clone via `game.assets.cloneScene(HP_GLB.yourProp)` in the level builder.

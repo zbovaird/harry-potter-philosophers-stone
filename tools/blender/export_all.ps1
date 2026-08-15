@@ -28,6 +28,11 @@ function Invoke-BlenderScript([string]$RelativeScript) {
 
 Invoke-BlenderScript "tools\blender\build_hp_props.py"
 
+$CosProps = Join-Path $Repo "tools\blender\build_cos_props.py"
+if (Test-Path $CosProps) {
+  Invoke-BlenderScript "tools\blender\build_cos_props.py"
+}
+
 $SpellVfx = Join-Path $Repo "tools\blender\build_spell_vfx.py"
 if (Test-Path $SpellVfx) {
   Invoke-BlenderScript "tools\blender\build_spell_vfx.py"

@@ -9,6 +9,7 @@ import { TextureLibrary } from "./textures.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import {
   LEVELS,
+  CAMPAIGNS,
   loadProgress,
   saveProgress,
   markLevelComplete,
@@ -29,6 +30,31 @@ import { buildTrollLevel, resetTrollQuest, updateTrollLevel, trollSpawn } from "
 import { buildForestLevel, resetForestQuest, updateForestLevel, forestSpawn } from "./levels/forest.js";
 import { buildTrapdoorLevel, resetTrapdoorQuest, updateTrapdoorLevel, trapdoorSpawn } from "./levels/trapdoor.js";
 import { buildQuirrellLevel, resetQuirrellQuest, updateQuirrellLevel, quirrellSpawn } from "./levels/quirrell.js";
+import { buildBurrowLevel, resetBurrowQuest, updateBurrowLevel, burrowSpawn } from "./levels/burrow.js";
+import { buildAngliaLevel, resetAngliaQuest, updateAngliaLevel, angliaSpawn } from "./levels/anglia.js";
+import { buildWillowLevel, resetWillowQuest, updateWillowLevel, willowSpawn } from "./levels/willow.js";
+import { buildDuelingLevel, resetDuelingQuest, updateDuelingLevel, duelingSpawn } from "./levels/dueling.js";
+import { buildPolyjuiceLevel, resetPolyjuiceQuest, updatePolyjuiceLevel, polyjuiceSpawn } from "./levels/polyjuice.js";
+import { buildMandrakesLevel, resetMandrakesQuest, updateMandrakesLevel, mandrakesSpawn } from "./levels/mandrakes.js";
+import { buildSpidersLevel, resetSpidersQuest, updateSpidersLevel, spidersSpawn, castPatronusInSpiders } from "./levels/spiders.js";
+import { buildChamberLevel, resetChamberQuest, updateChamberLevel, chamberSpawn } from "./levels/chamber.js";
+
+const LEVEL_RUNTIME = {
+  diagon: { build: buildDiagonLevel, reset: resetDiagonQuest, update: updateDiagonLevel, spawn: diagonSpawn },
+  hogwarts: { build: buildHogwartsLevel, reset: resetHogwartsQuest, update: updateHogwartsLevel, spawn: hogwartsSpawn },
+  troll: { build: buildTrollLevel, reset: resetTrollQuest, update: updateTrollLevel, spawn: trollSpawn },
+  forest: { build: buildForestLevel, reset: resetForestQuest, update: updateForestLevel, spawn: forestSpawn },
+  trapdoor: { build: buildTrapdoorLevel, reset: resetTrapdoorQuest, update: updateTrapdoorLevel, spawn: trapdoorSpawn },
+  quirrell: { build: buildQuirrellLevel, reset: resetQuirrellQuest, update: updateQuirrellLevel, spawn: quirrellSpawn },
+  burrow: { build: buildBurrowLevel, reset: resetBurrowQuest, update: updateBurrowLevel, spawn: burrowSpawn },
+  anglia: { build: buildAngliaLevel, reset: resetAngliaQuest, update: updateAngliaLevel, spawn: angliaSpawn },
+  willow: { build: buildWillowLevel, reset: resetWillowQuest, update: updateWillowLevel, spawn: willowSpawn },
+  dueling: { build: buildDuelingLevel, reset: resetDuelingQuest, update: updateDuelingLevel, spawn: duelingSpawn },
+  polyjuice: { build: buildPolyjuiceLevel, reset: resetPolyjuiceQuest, update: updatePolyjuiceLevel, spawn: polyjuiceSpawn },
+  mandrakes: { build: buildMandrakesLevel, reset: resetMandrakesQuest, update: updateMandrakesLevel, spawn: mandrakesSpawn },
+  spiders: { build: buildSpidersLevel, reset: resetSpidersQuest, update: updateSpidersLevel, spawn: spidersSpawn },
+  chamber: { build: buildChamberLevel, reset: resetChamberQuest, update: updateChamberLevel, spawn: chamberSpawn },
+};
 
 const WALK_SPEED = 4.2;
 const RUN_SPEED = 6.8;
@@ -67,6 +93,8 @@ class Game {
     this.combat = null;
     this.caster = null;
     this.currentLevel = null;
+    this.selectedCampaign = "ps";
+    this.flyingVehicle = false;
     this.state = "loading";
     this.cloaked = false;
     this.velocityY = 0;
@@ -99,6 +127,8 @@ class Game {
       characterGrid: $("character-grid"),
       confirmCharacter: $("confirm-character-btn"),
       levelSelect: $("level-select"),
+      campaignTabs: $("campaign-tabs"),
+      campaignBlurb: $("campaign-blurb"),
       levelButtons: $("level-buttons"),
       changeCharacter: $("change-character-btn"),
       header: $("game-header"),
@@ -371,13 +401,38 @@ class Game {
     this.hideGameplayUi();
     this.ui.levelSelect.classList.remove("hidden");
     this.progress = loadProgress();
+    this.renderCampaignTabs();
+    this.renderLevelButtons();
+  }
+
+  renderCampaignTabs() {
+    const tabs = this.ui.campaignTabs;
+    if (!tabs) return;
+    tabs.innerHTML = "";
+    for (const campaign of CAMPAIGNS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `campaign-tab${campaign.id === this.selectedCampaign ? " active" : ""}`;
+      btn.textContent = campaign.title;
+      btn.addEventListener("click", () => {
+        this.selectedCampaign = campaign.id;
+        this.renderCampaignTabs();
+        this.renderLevelButtons();
+      });
+      tabs.appendChild(btn);
+    }
+  }
+
+  renderLevelButtons() {
+    const campaign = CAMPAIGNS.find((c) => c.id === this.selectedCampaign) || CAMPAIGNS[0];
+    if (this.ui.campaignBlurb) this.ui.campaignBlurb.textContent = campaign.blurb;
     this.ui.levelButtons.innerHTML = "";
-    for (const level of LEVELS) {
+    for (const level of campaign.levels) {
       const btn = document.createElement("button");
       btn.type = "button";
       const unlocked = isLevelUnlocked(level.id, this.progress);
       const done = Boolean(this.progress.completed[level.id]);
-      btn.textContent = `Level ${level.index} — ${level.title}${done ? " ✓" : ""}`;
+      btn.textContent = `${campaign.id === "cos" ? "CoS" : "PS"} ${level.index} — ${level.title}${done ? " ✓" : ""}`;
       btn.disabled = !unlocked;
       btn.addEventListener("click", () => this.startLevel(level.id));
       this.ui.levelButtons.appendChild(btn);
@@ -407,15 +462,7 @@ class Game {
 
   ensureLevelBuilt(levelId) {
     if (this.builtLevels.has(levelId)) return;
-    const builders = {
-      diagon: buildDiagonLevel,
-      hogwarts: buildHogwartsLevel,
-      troll: buildTrollLevel,
-      forest: buildForestLevel,
-      trapdoor: buildTrapdoorLevel,
-      quirrell: buildQuirrellLevel,
-    };
-    builders[levelId]?.(this);
+    LEVEL_RUNTIME[levelId]?.build?.(this);
     this.builtLevels.add(levelId);
   }
 
@@ -423,6 +470,9 @@ class Game {
     for (const [id, group] of Object.entries(this.levelGroups)) {
       const on = id === activeId;
       group.visible = on;
+      group.traverse((obj) => {
+        if (obj.isLight) obj.visible = on;
+      });
       const cols = this.levelColliders[id] || [];
       for (const c of cols) c.active = on;
     }
@@ -439,6 +489,7 @@ class Game {
     this.applyLevelActivation(levelId);
     this.currentLevel = levelId;
     this.cloaked = false;
+    this.flyingVehicle = false;
     if (this.player) {
       this.player.root.traverse((o) => {
         if (o.isMesh && o.material) {
@@ -448,15 +499,7 @@ class Game {
       });
     }
 
-    const resets = {
-      diagon: resetDiagonQuest,
-      hogwarts: resetHogwartsQuest,
-      troll: resetTrollQuest,
-      forest: resetForestQuest,
-      trapdoor: resetTrapdoorQuest,
-      quirrell: resetQuirrellQuest,
-    };
-    resets[levelId]?.(this);
+    LEVEL_RUNTIME[levelId]?.reset?.(this);
 
     // Wand comes from Ollivanders first; later levels start with it equipped.
     if (levelId === "diagon") {
@@ -467,21 +510,26 @@ class Game {
       this.setWandEquipped(true);
     }
 
-    const spawns = {
-      diagon: diagonSpawn,
-      hogwarts: hogwartsSpawn,
-      troll: trollSpawn,
-      forest: forestSpawn,
-      trapdoor: trapdoorSpawn,
-      quirrell: quirrellSpawn,
-    };
-    const spawn = spawns[levelId]();
+    const spawn = LEVEL_RUNTIME[levelId]?.spawn?.() || new THREE.Vector3();
     this.player.root.position.copy(spawn);
     this.velocityY = 0;
-    // Angle the opening view so Diagon shopfronts read clearly
-    this.cameraYaw = levelId === "diagon" ? Math.PI + 0.45 : Math.PI;
-    this.cameraPitch = levelId === "diagon" ? 0.18 : 0.28;
+    const lookIntoLevel = [
+      "burrow",
+      "anglia",
+      "willow",
+      "dueling",
+      "polyjuice",
+      "mandrakes",
+      "spiders",
+      "chamber",
+      "forest",
+      "trapdoor",
+    ].includes(levelId);
+    this.cameraYaw = levelId === "diagon" ? Math.PI + 0.45 : lookIntoLevel ? 0 : Math.PI;
+    this.cameraPitch = levelId === "diagon" ? 0.18 : 0.22;
     this.combat = new CombatState(this.player.stats);
+    this._lastManaCeil = -1;
+    this._lastHpCeil = -1;
     this.bolts.clear();
     this.enemyBolts.clear();
     this.spellVfx.clear();
@@ -560,6 +608,12 @@ class Game {
 
   getActiveEnemies() {
     return this.levelData[this.currentLevel]?.enemies || [];
+  }
+
+  getActiveBoss() {
+    const data = this.levelData[this.currentLevel];
+    if (!data) return null;
+    return data.troll || data.quirrell || data.malfoy || data.basilisk || null;
   }
 
   getInteractives() {
@@ -661,13 +715,13 @@ class Game {
       }
       return;
     }
-    if (spell.restricted && this.currentLevel !== "quirrell") {
+    if (spell.restricted && this.currentLevel !== "quirrell" && this.currentLevel !== "chamber") {
       this.showMessage("That curse has no place here.", 1.4);
       return;
     }
 
     if (!this.combat.spendMana(spell.mana)) return;
-    this.caster.beginCastLock(this.combat.castCooldownMul);
+    this.caster.beginCastLock(spell, this.combat.castCooldownMul);
     this.audio.cast(spell);
     this.refreshHotbarUi();
 
@@ -696,11 +750,12 @@ class Game {
     }
 
     // Patronus: scare forest creatures + fire a bolt
-    if (spell.effect === "patronus" && this.currentLevel === "forest") {
-      castPatronusInForest(this);
-      const tip = new THREE.Vector3();
-      this.player.wandTip.getWorldPosition(tip);
-      this.spellVfx.spawnPatronus(tip, aim);
+    if (spell.effect === "patronus") {
+      if (this.currentLevel === "forest") castPatronusInForest(this);
+      if (this.currentLevel === "spiders") castPatronusInSpiders(this);
+      const tipPatronus = new THREE.Vector3();
+      this.player.wandTip.getWorldPosition(tipPatronus);
+      this.spellVfx.spawnPatronus(tipPatronus, aim);
     }
 
     if (spell.type === "aoe") {
@@ -848,6 +903,12 @@ class Game {
   }
 
   applyUtilitySpell(spell) {
+    const quest = getQuest(this.currentLevel);
+    const data = this.levelData[this.currentLevel];
+    if (quest?.onUtilitySpell?.(this, spell, data)) {
+      this.updateObjective();
+      return;
+    }
     if (spell.effect === "levitate" && this.currentLevel === "diagon") {
       const data = this.levelData.diagon;
       const feather = data.interactives.find((i) => i.id === "feather");
@@ -900,17 +961,38 @@ class Game {
   }
 
   checkEnvironmentSpellHits() {
-    if (this.currentLevel !== "trapdoor") return;
-    const data = this.levelData.trapdoor;
-    if (!data || data.snareCleared || !data.snare) return;
-    data.snare.getWorldPosition(_interactWorld);
-    for (const bolt of this.bolts.active) {
-      const spell = getSpell(bolt.spellId);
-      if (!spell || (spell.id !== "incendio" && spell.effect !== "burn")) continue;
-      if (bolt.mesh.position.distanceTo(_interactWorld) < 5.5) {
-        this.clearDevilSnare("Incendio burns back the Devil's Snare!");
-        bolt.life = 0;
-        break;
+    if (this.currentLevel === "trapdoor") {
+      const data = this.levelData.trapdoor;
+      if (!data || data.snareCleared || !data.snare) return;
+      data.snare.getWorldPosition(_interactWorld);
+      for (const bolt of this.bolts.active) {
+        const spell = getSpell(bolt.spellId);
+        if (!spell || (spell.id !== "incendio" && spell.effect !== "burn")) continue;
+        if (bolt.mesh.position.distanceTo(_interactWorld) < 5.5) {
+          this.clearDevilSnare("Incendio burns back the Devil's Snare!");
+          bolt.life = 0;
+          break;
+        }
+      }
+      return;
+    }
+    if (this.currentLevel !== "spiders") return;
+    const data = this.levelData.spiders;
+    if (!data?.webs) return;
+    for (const web of data.webs) {
+      if (!web.visible) continue;
+      web.getWorldPosition(_interactWorld);
+      for (const bolt of this.bolts.active) {
+        const spell = getSpell(bolt.spellId);
+        if (!spell || (spell.id !== "incendio" && spell.effect !== "burn")) continue;
+        if (bolt.mesh.position.distanceTo(_interactWorld) < 4.2) {
+          web.visible = false;
+          data.websBurned = Math.min(2, (data.websBurned || 0) + 1);
+          this.showMessage("Incendio! The webbing shrivels.");
+          this.updateObjective();
+          bolt.life = 0;
+          break;
+        }
       }
     }
   }
@@ -938,7 +1020,17 @@ class Game {
         this.showMessage("Quirrell falls — the Stone is yours to claim!");
         this.updateObjective();
       }
-      if (this.currentLevel === "forest") {
+      if (this.currentLevel === "dueling" && enemy === this.levelData.dueling?.malfoy) {
+        this.showMessage("Malfoy is disarmed — the club erupts!");
+        this.updateObjective();
+      }
+      if (this.currentLevel === "chamber" && enemy === this.levelData.chamber?.basilisk) {
+        this.showMessage("The basilisk crashes down. Fawkes wheels closer.");
+        const fawkes = this.levelData.chamber.fawkes;
+        if (fawkes) fawkes.visible = true;
+        this.updateObjective();
+      }
+      if (this.currentLevel === "forest" || this.currentLevel === "spiders") {
         this.updateObjective();
       }
       if (this.currentLevel === "troll" || this.currentLevel === "quirrell") {
@@ -951,21 +1043,16 @@ class Game {
     if (!this.combat) return;
     const hpCeil = Math.ceil(this.combat.hp);
     const manaCeil = Math.ceil(this.combat.mana);
-    if (hpCeil !== this._lastHpCeil) {
-      this._lastHpCeil = hpCeil;
-      this.ui.healthText.textContent = `${hpCeil} / ${this.combat.maxHp}`;
-      this.ui.healthFill.style.width = `${(this.combat.hp / this.combat.maxHp) * 100}%`;
-    }
-    if (manaCeil !== this._lastManaCeil) {
-      this._lastManaCeil = manaCeil;
-      this.ui.manaText.textContent = `${manaCeil} / ${this.combat.maxMana}`;
-      this.ui.manaFill.style.width = `${(this.combat.mana / this.combat.maxMana) * 100}%`;
-    }
+    this.ui.healthText.textContent = `${hpCeil} / ${this.combat.maxHp}`;
+    this.ui.healthFill.style.width = `${(this.combat.hp / this.combat.maxHp) * 100}%`;
+    this.ui.manaText.textContent = `${manaCeil} / ${this.combat.maxMana}`;
+    this.ui.manaFill.style.width = `${(this.combat.mana / this.combat.maxMana) * 100}%`;
+    this._lastHpCeil = hpCeil;
+    this._lastManaCeil = manaCeil;
     this.fx.setLowHealth(this.combat.hp / this.combat.maxHp < 0.3 ? 1 - this.combat.hp / this.combat.maxHp : 0);
 
-    const bossLevels = ["troll", "quirrell"];
-    if (bossLevels.includes(this.currentLevel)) {
-      const boss = this.currentLevel === "troll" ? this.levelData.troll.troll : this.levelData.quirrell.quirrell;
+    const boss = this.getActiveBoss();
+    if (boss) {
       this.ui.bossHealth.classList.remove("hidden");
       this.ui.bossName.textContent = boss.name;
       this.ui.bossHealthText.textContent = `${Math.max(0, Math.ceil(boss.hp))} / ${boss.maxHp}`;
@@ -1016,14 +1103,16 @@ class Game {
   }
 
   getGroundHeight(x, z) {
-    let best = 0;
+    let best = -Infinity;
+    let hit = false;
     for (const c of this.colliders) {
       if (!c.active || !c.ground) continue;
       if (x >= c.minX && x <= c.maxX && z >= c.minZ && z <= c.maxZ) {
         best = Math.max(best, c.maxY);
+        hit = true;
       }
     }
-    return best;
+    return hit ? best : 0;
   }
 
   updatePlayer(delta) {
@@ -1076,27 +1165,32 @@ class Game {
     this.resolveCollisions(pos);
 
     // Jump / gravity
-    this.coyote = this.onGround ? COYOTE_TIME : Math.max(0, this.coyote - delta);
-    if (this.input.wasPressed("Space")) this.jumpBuffer = JUMP_BUFFER;
-    else this.jumpBuffer = Math.max(0, this.jumpBuffer - delta);
-
-    if (this.jumpBuffer > 0 && this.coyote > 0) {
-      this.velocityY = JUMP_VELOCITY;
-      this.onGround = false;
-      this.jumpBuffer = 0;
-      this.coyote = 0;
-      this.audio.jump();
-    }
-
-    this.velocityY += GRAVITY * delta;
-    pos.y += this.velocityY * delta;
-    const ground = this.getGroundHeight(pos.x, pos.z);
-    if (pos.y <= ground) {
-      pos.y = ground;
+    if (this.flyingVehicle) {
       this.velocityY = 0;
       this.onGround = true;
     } else {
-      this.onGround = false;
+      this.coyote = this.onGround ? COYOTE_TIME : Math.max(0, this.coyote - delta);
+      if (this.input.wasPressed("Space")) this.jumpBuffer = JUMP_BUFFER;
+      else this.jumpBuffer = Math.max(0, this.jumpBuffer - delta);
+
+      if (this.jumpBuffer > 0 && this.coyote > 0) {
+        this.velocityY = JUMP_VELOCITY;
+        this.onGround = false;
+        this.jumpBuffer = 0;
+        this.coyote = 0;
+        this.audio.jump();
+      }
+
+      this.velocityY += GRAVITY * delta;
+      pos.y += this.velocityY * delta;
+      const ground = this.getGroundHeight(pos.x, pos.z);
+      if (pos.y <= ground) {
+        pos.y = ground;
+        this.velocityY = 0;
+        this.onGround = true;
+      } else {
+        this.onGround = false;
+      }
     }
 
     if (_wish.lengthSq() > 0.01) {
@@ -1145,15 +1239,7 @@ class Game {
 
   updateLevels(delta) {
     if (this.state !== "playing") return;
-    const updaters = {
-      diagon: updateDiagonLevel,
-      hogwarts: updateHogwartsLevel,
-      troll: updateTrollLevel,
-      forest: updateForestLevel,
-      trapdoor: updateTrapdoorLevel,
-      quirrell: updateQuirrellLevel,
-    };
-    updaters[this.currentLevel]?.(this, delta, this.time);
+    LEVEL_RUNTIME[this.currentLevel]?.update?.(this, delta, this.time);
 
     this.enemyBolts.update(delta, this.player?.root, 0.55);
 
@@ -1176,15 +1262,10 @@ class Game {
     if (!this.combat.alive) {
       this.showMessage("You have fallen… Restarting level.", 2);
       this.combat = new CombatState(this.player.stats);
-      const spawns = {
-        diagon: diagonSpawn,
-        hogwarts: hogwartsSpawn,
-        troll: trollSpawn,
-        forest: forestSpawn,
-        trapdoor: trapdoorSpawn,
-        quirrell: quirrellSpawn,
-      };
-      this.player.root.position.copy(spawns[this.currentLevel]());
+      this.flyingVehicle = false;
+      const spawn = LEVEL_RUNTIME[this.currentLevel]?.spawn?.();
+      if (spawn) this.player.root.position.copy(spawn);
+      LEVEL_RUNTIME[this.currentLevel]?.reset?.(this);
     }
   }
 

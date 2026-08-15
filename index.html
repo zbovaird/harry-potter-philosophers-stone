@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Harry Potter — The Philosopher's Stone</title>
+    <title>Harry Potter — Philosopher's Stone &amp; Chamber of Secrets</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
@@ -13,7 +13,7 @@
     <div id="ui">
       <header class="hidden" id="game-header">
         <h1>Harry Potter</h1>
-        <p class="subtitle" id="level-subtitle">The Philosopher's Stone</p>
+        <p class="subtitle" id="level-subtitle">Choose a chapter</p>
       </header>
 
       <div id="hud" class="hidden">
@@ -83,8 +83,9 @@
       </div>
 
       <div id="level-select" class="hidden">
-        <h2>The Philosopher's Stone</h2>
-        <p>Follow the events of the first film — in order.</p>
+        <h2>Hogwarts adventures</h2>
+        <p id="campaign-blurb" class="select-lead">Two films. Pick a chapter — all levels are open.</p>
+        <div class="campaign-tabs" id="campaign-tabs"></div>
         <div class="level-actions" id="level-buttons"></div>
         <button id="change-character-btn" type="button" class="secondary">Change character</button>
       </div>
